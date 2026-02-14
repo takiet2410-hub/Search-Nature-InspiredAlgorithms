@@ -87,7 +87,9 @@ class ContinuousLocalSearch:
         # Random khởi tạo
         curr_pos = bounds[:, 0] + np.random.rand(dim) * (bounds[:, 1] - bounds[:, 0])
         curr_score = func(curr_pos)
+        
         history = [curr_score]
+        path = [curr_pos.copy()] # <--- MỚI: Lưu điểm xuất phát
 
         for _ in range(self.max_iter):
             # Sinh hàng xóm (Gaussian noise)
@@ -95,10 +97,13 @@ class ContinuousLocalSearch:
             neighbor = np.clip(neighbor, bounds[:, 0], bounds[:, 1])
             n_score = func(neighbor)
             
-            # Chỉ nhận nếu tốt hơn (Leo đồi)
+            # Chỉ nhận nếu tốt hơn (Leo đồi - Greedy)
             if n_score < curr_score:
                 curr_pos = neighbor
                 curr_score = n_score
             
             history.append(curr_score)
-        return curr_pos, curr_score, history
+            path.append(curr_pos.copy()) # <--- MỚI: Lưu toạ độ mới vào đường đi
+            
+        # Trả về 4 giá trị: Vị trí cuối, Điểm số cuối, Lịch sử điểm số, Lịch sử đường đi
+        return curr_pos, curr_score, history, path

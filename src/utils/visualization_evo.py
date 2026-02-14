@@ -77,7 +77,7 @@ def plot_robustness_convergence(results_dict, title, filename):
     print(f"[INFO] Saved Robustness Plot: {filename}")
 
 def plot_boxplot_comparison(data_dict, title, filename, ylabel='Fitness'):
-    """Vẽ Boxplot so sánh phân phối"""
+    """Vẽ Boxplot so sánh phân phối - Đã tinh chỉnh"""
     plt.figure(figsize=(8, 6))
     labels = []
     values = []
@@ -85,12 +85,18 @@ def plot_boxplot_comparison(data_dict, title, filename, ylabel='Fitness'):
         labels.extend([alg_name] * len(scores))
         values.extend(scores)
         
-    sns.boxplot(x=labels, y=values, palette="Set2")
+    # Thêm showmeans để thấy điểm trung bình ngay cả khi hộp bị phẳng
+    # Thêm notch=True nếu bạn muốn so sánh độ tin cậy giữa các trung vị
+    sns.boxplot(x=labels, y=values, palette="Set2", showmeans=True, 
+                meanprops={"marker":"s","markerfacecolor":"white", "markeredgecolor":"black"})
+    
+    # Nếu muốn thấy rõ từng điểm dữ liệu chạy (30 runs), hãy dùng thêm stripplot
+    sns.stripplot(x=labels, y=values, color="orange", alpha=0.5, jitter=True)
+    
     plt.title(title, fontsize=14)
     plt.ylabel(ylabel, fontsize=12)
     plt.savefig(f'results/figures/{filename}.png', dpi=150)
     plt.close()
-    print(f"[INFO] Saved Boxplot: {filename}")
 
 def plot_scalability_lines(x_values, y_dict, title, filename, xlabel, ylabel):
     """Vẽ biểu đồ đường so sánh Scalability (Time hoặc Fitness theo Size)"""
