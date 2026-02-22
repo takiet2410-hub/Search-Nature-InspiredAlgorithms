@@ -1,0 +1,20 @@
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Virtual Environment
+venv/
+env/
+
+# IDE settings
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+
+# Dataset/Large files (nếu có)
+*.csv
+
+# Local docs
+THEORY_EXPLAINED.md
