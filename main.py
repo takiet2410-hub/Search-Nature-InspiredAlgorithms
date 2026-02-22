@@ -6,6 +6,7 @@ from src.utils import problems_evo, visualization_evo
 # Import Algorithms
 from src.algorithms.evolution.genetic_algorithm import GeneticAlgorithmTSP
 from src.algorithms.evolution.differential_evolution import DifferentialEvolution
+from src.algorithms.biology.cuckoo_search import CuckooSearch
 from src.algorithms.classical.baselines_evo import TSPGraphSearch, ContinuousLocalSearch
 
 # --- HÀM THỐNG KÊ (NUMPY ONLY) ---
@@ -215,8 +216,8 @@ class ContinuousExperiment:
         print(f"\n>>> RUNNING COMPARISON ON: {func_name} Function <<<")
         runs = 30
         
-        hist_de_all, hist_hc_all = [], []
-        scores_de, scores_hc = [], []
+        hist_de_all, hist_hc_all, hist_cs_all = [], [], []
+        scores_de, scores_hc, scores_cs = [], [], []
         
         # Quy đổi tương đối: 1 generation của DE (50 cá thể) ~= 50 lần lặp của HC
         # Để công bằng về số lần gọi hàm (Function Evaluations)
@@ -239,26 +240,39 @@ class ContinuousExperiment:
             # Lấy mẫu cứ mỗi `pop_size` lần lặp thì lấy 1 điểm
             sampled_hist_hc = h_hc[::pop_size][:generations]
             hist_hc_all.append(sampled_hist_hc)
+
+            # CS
+            cs = CuckooSearch(func, bounds, n_nests=50, pa=0.25, alpha=0.01, beta=1.5)
+            _, s_cs, h_cs, _ = cs.optimize(iterations=generations)
+            scores_cs.append(s_cs)
+            hist_cs_all.append(h_cs)
             
         # --- VẼ BIỂU ĐỒ ---
         # 1. Convergence (Tốc độ hội tụ)
         visualization_evo.plot_robustness_convergence(
-            {'DE': hist_de_all, 'HC': hist_hc_all}, 
+            {'DE': hist_de_all, 'HC': hist_hc_all, 'CS': hist_cs_all}, 
             f"Convergence: DE vs HC on {func_name}", 
             f"cont_{func_name.lower()}_convergence"
         )
         
         # 2. Quality (Boxplot)
         visualization_evo.plot_boxplot_comparison(
-            {'DE': scores_de, 'HC': scores_hc}, 
+            {'DE': scores_de, 'HC': scores_hc, 'CS': scores_cs}, 
             f"Quality Distribution on {func_name}", 
             f"cont_{func_name.lower()}_boxplot"
         )
         
         # Stats Output
-        print(f"  [Stats {func_name}] DE Mean: {np.mean(scores_de):.4f} | HC Mean: {np.mean(scores_hc):.4f}")
+        print(
+            f"  [Stats {func_name}] "
+            f"DE Mean: {np.mean(scores_de):.4f} | "
+            f"HC Mean: {np.mean(scores_hc):.4f} | "
+            f"CS Mean: {np.mean(scores_cs):.4f}"
+        )
         t_stat = manual_twosample_ttest(scores_de, scores_hc)
         print(f"  T-Test (DE vs HC): t={t_stat:.4f}")
+        print(f"  T-Test (CS vs HC): t={manual_twosample_ttest(scores_cs, scores_hc):.4f}")
+        print(f"  T-Test (DE vs CS): t={manual_twosample_ttest(scores_de, scores_cs):.4f}")
 
     def metric_exploration_visualization(self):
         print("\n[3] EXPLORATION vs EXPLOITATION (3D Visualization)")
@@ -274,10 +288,17 @@ class ContinuousExperiment:
         de = DifferentialEvolution(func, bounds, pop_size=20)
         _, _, _, path_de = de.optimize(generations=20)
         
+        cs = CuckooSearch(func, bounds, n_nests=20, pa=0.25, alpha=0.02)
+        _, _, _, path_cs = cs.optimize(iterations=20)
+
         # Vẽ
         visualization_evo.plot_3d_landscape_path(
             func, bounds, 
-            {'DE (Exploration)': path_de, 'HC (Exploitation)': path_hc}, 
+            {
+                'DE (Exploration)': path_de,
+                'HC (Exploitation)': path_hc,
+                'CS (Levy Flights)': path_cs
+            },
             "Trajectory Comparison: Rastrigin", "cont_3d_rastrigin_comparison"
         )
 
@@ -285,7 +306,7 @@ class ContinuousExperiment:
         print("\n[4] SCALABILITY (Time vs Dimensions)")
         # Vẫn giữ nguyên logic cũ (chạy trên Rastrigin để test độ khó)
         dims = [2, 5, 10, 20]
-        times = {'DE': [], 'HC': []}
+        times = {'DE': [], 'HC': [], 'CS': []}
         
         for d in dims:
             bounds = [[-5.12, 5.12]] * d
@@ -302,10 +323,16 @@ class ContinuousExperiment:
             hc = ContinuousLocalSearch(max_iter=1500)
             hc.hill_climbing(func, bounds)
             times['HC'].append(time.time() - s)
+
+            # CS
+            s = time.time()
+            cs = CuckooSearch(func, bounds, n_nests=30, pa=0.25, alpha=0.01)
+            cs.optimize(iterations=50)
+            times['CS'].append(time.time() - s)
             
         visualization_evo.plot_scalability_lines(
             dims, times, 
-            "Scalability: DE vs HC on Rastrigin Function (Time)", "cont_scalability_time",
+            "Scalability: DE vs HC vs CS on Rastrigin Function (Time)", "cont_scalability_time",
             "Dimensions (D)", "Execution Time (s)"
         )
 
@@ -329,6 +356,30 @@ class ContinuousExperiment:
         visualization_evo.plot_parameter_sensitivity(
             results, CR_vals, F_vals, "DE Sensitivity Analysis on Rastrigin Function", "cont_sensitivity",
             "Crossover Rate (CR)", "Mutation Factor (F)"
+        )
+
+        # --- CS sensitivity ---
+        alpha_vals = [0.005, 0.01, 0.05]
+        pa_vals = [0.1, 0.25, 0.4]
+        cs_results = np.zeros((len(alpha_vals), len(pa_vals)))
+
+        for i, alpha in enumerate(alpha_vals):
+            for j, pa in enumerate(pa_vals):
+                scores = []
+                for _ in range(5):
+                    cs = CuckooSearch(
+                        problems_evo.rastrigin_function, bounds,
+                        n_nests=30, pa=pa, alpha=alpha, beta=1.5
+                    )
+                    _, s, _, _ = cs.optimize(iterations=50)
+                    scores.append(s)
+                cs_results[i, j] = np.mean(scores)
+
+        visualization_evo.plot_parameter_sensitivity(
+            cs_results, pa_vals, alpha_vals,
+            "Cuckoo Search Sensitivity on Rastrigin Function",
+            "cont_sensitivity_cs",
+            "Abandonment Probability (pa)", "Step Size (alpha)"
         )
 
 if __name__ == "__main__":
