@@ -11,6 +11,13 @@ sns.set(style="whitegrid")
 if not os.path.exists('results/figures'):
     os.makedirs('results/figures')
 
+def _save_figure(filename):
+    full_path = f'results/figures/{filename}.png'
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    plt.savefig(full_path, dpi=150)
+    plt.close()
+    print(f"[INFO] Saved: {full_path}")
+
 # ==========================================
 # 1. CÁC HÀM CƠ BẢN (TSP & CONVERGENCE)
 # ==========================================
@@ -22,7 +29,7 @@ def plot_convergence(history, title, filename):
     plt.xlabel('Generations', fontsize=12)
     plt.ylabel('Fitness (Cost)', fontsize=12)
     plt.legend()
-    plt.savefig(f'results/figures/{filename}.png', dpi=150)
+    _save_figure(filename)
     plt.close()
     print(f"[INFO] Saved Convergence: {filename}")
 
@@ -42,7 +49,7 @@ def plot_tsp_route(cities, route, title, filename):
     plt.plot(x_coords, y_coords, c='blue', linestyle='-', linewidth=1.5, alpha=0.7, label='Route')
     plt.title(title, fontsize=14)
     plt.legend()
-    plt.savefig(f'results/figures/{filename}.png', dpi=150)
+    _save_figure(filename)
     plt.close()
     print(f"[INFO] Saved TSP Route: {filename}")
 
@@ -72,7 +79,7 @@ def plot_robustness_convergence(results_dict, title, filename):
     plt.ylabel('Fitness (Log Scale)', fontsize=12)
     plt.yscale('log')
     plt.legend()
-    plt.savefig(f'results/figures/{filename}.png', dpi=150)
+    _save_figure(filename)
     plt.close()
     print(f"[INFO] Saved Robustness Plot: {filename}")
 
@@ -95,7 +102,7 @@ def plot_boxplot_comparison(data_dict, title, filename, ylabel='Fitness'):
     
     plt.title(title, fontsize=14)
     plt.ylabel(ylabel, fontsize=12)
-    plt.savefig(f'results/figures/{filename}.png', dpi=150)
+    _save_figure(filename)
     plt.close()
 
 def plot_scalability_lines(x_values, y_dict, title, filename, xlabel, ylabel):
@@ -111,7 +118,7 @@ def plot_scalability_lines(x_values, y_dict, title, filename, xlabel, ylabel):
     plt.ylabel(ylabel, fontsize=12)
     plt.legend()
     plt.grid(True)
-    plt.savefig(f'results/figures/{filename}.png', dpi=150)
+    _save_figure(filename)
     plt.close()
     print(f"[INFO] Saved Scalability Line Plot: {filename}")
 
@@ -123,7 +130,7 @@ def plot_parameter_sensitivity(matrix, x_labels, y_labels, title, filename, xlab
     plt.title(title, fontsize=14)
     plt.xlabel(xlabel, fontsize=12)
     plt.ylabel(ylabel, fontsize=12)
-    plt.savefig(f'results/figures/{filename}.png', dpi=150)
+    _save_figure(filename)
     plt.close()
     print(f"[INFO] Saved Heatmap: {filename}")
 
@@ -165,6 +172,6 @@ def plot_3d_landscape_path(func, bounds, trajectories_dict, title, filename, res
     ax.set_ylabel('Y')
     ax.set_zlabel('Fitness')
     ax.legend()
-    plt.savefig(f'results/figures/{filename}.png', dpi=150)
+    _save_figure(filename)
     plt.close()
     print(f"[INFO] Saved 3D Trajectory: {filename}")

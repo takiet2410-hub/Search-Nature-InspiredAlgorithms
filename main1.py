@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import time
-from src.utils import problems_evo, visualization_evo
+from src.utils import problems, visualization
 
 # Import Algorithms
 from src.algorithms.evolution.genetic_algorithm import GeneticAlgorithmTSP
@@ -103,12 +103,12 @@ def run_ga_tsp(n, dist, generations, pop_size):
 # =============================================================================
 CONTINUOUS_PROBLEMS = {
     "Sphere": {
-        "func": problems_evo.sphere_function,
+        "func": problems.sphere_function,
         "bounds": [[-5.12, 5.12]] * 10,
         "generations": 50,
     },
     "Rastrigin": {
-        "func": problems_evo.rastrigin_function,
+        "func": problems.rastrigin_function,
         "bounds": [[-5.12, 5.12]] * 10,
         "generations": 100,
     },
@@ -176,17 +176,17 @@ class ContinuousComparison:
         tag = f"cont_{prob_name.lower()}_{'_vs_'.join(self.algorithm_names)}"
 
         # Convergence plot
-        visualization_evo.plot_robustness_convergence(
+        visualization.plot_robustness_convergence(
             all_histories,
             f"Convergence on {prob_name}: {' vs '.join(self.algorithm_names)}",
-            f"{tag}_convergence"
+            f"continuous/convergence/{tag}_convergence"
         )
 
         # Boxplot
-        visualization_evo.plot_boxplot_comparison(
+        visualization.plot_boxplot_comparison(
             all_scores,
             f"Quality on {prob_name}: {' vs '.join(self.algorithm_names)}",
-            f"{tag}_boxplot"
+            f"continuous/quality/{tag}_boxplot"
         )
 
         # Stats
@@ -208,7 +208,7 @@ class ContinuousComparison:
 
         for d in dims:
             bounds = [[-5.12, 5.12]] * d
-            func = problems_evo.rastrigin_function
+            func = problems.rastrigin_function
             for name in self.algorithm_names:
                 s = time.time()
                 # Use fixed pop_size=30 and fixed HC budget to match main.py behavior
@@ -219,18 +219,17 @@ class ContinuousComparison:
                     CONTINUOUS_ALGORITHMS[name](func, bounds, generations=50, pop_size=30)
                 times[name].append(time.time() - s)
 
-        visualization_evo.plot_scalability_lines(
+        visualization.plot_scalability_lines(
             dims, times,
             f"Scalability: {' vs '.join(self.algorithm_names)} on Rastrigin (Time)",
-            # Match exact filename from main.py
-            "cont_scalability_time",
+            "continuous/scalability/cont_scalability_time",
             "Dimensions (D)", "Execution Time (s)"
         )
 
     def _sensitivity_continuous(self):
         """Replicates metric_sensitivity for DE and CS from main.py"""
         bounds = [[-5.12, 5.12]] * 10
-        func = problems_evo.rastrigin_function
+        func = problems.rastrigin_function
 
         if "DE" in self.algorithm_names:
             print("\n[SENSITIVITY] DE on Rastrigin (F vs CR)")
@@ -245,10 +244,10 @@ class ContinuousComparison:
                         _, s, _, _ = de.optimize(generations=50)
                         scores.append(s)
                     results[i, j] = np.mean(scores)
-            visualization_evo.plot_parameter_sensitivity(
+            visualization.plot_parameter_sensitivity(
                 results, CR_vals, F_vals,
                 "DE Sensitivity Analysis on Rastrigin Function",
-                "cont_sensitivity",   # ← match main.py filename (not cont_sensitivity_de)
+                "continuous/sensitivity/cont_sensitivity",
                 "Crossover Rate (CR)", "Mutation Factor (F)"
             )
 
@@ -265,9 +264,9 @@ class ContinuousComparison:
                         _, s, _, _ = cs.optimize(iterations=50)
                         scores.append(s)
                     cs_results[i, j] = np.mean(scores)
-            visualization_evo.plot_parameter_sensitivity(
+            visualization.plot_parameter_sensitivity(
                 cs_results, pa_vals, alpha_vals,
-                "Cuckoo Search Sensitivity on Rastrigin Function", "cont_sensitivity_cs",
+                "Cuckoo Search Sensitivity on Rastrigin Function", "continuous/sensitivity/cont_sensitivity_cs",
                 "Abandonment Probability (pa)", "Step Size (alpha)"
             )
 
@@ -299,8 +298,8 @@ class TSPComparison:
 
         for n in self.sizes:
             print(f"  -> N={n}")
-            cities = problems_evo.generate_cities(n, seed=42)
-            dist = problems_evo.calculate_distance_matrix(cities)
+            cities = problems.generate_cities(n, seed=42)
+            dist = problems.calculate_distance_matrix(cities)
             solver = TSPGraphSearch(n, dist)
 
             s = time.time(); solver.bfs(); exact_times['BFS'].append(time.time() - s)
@@ -316,18 +315,18 @@ class TSPComparison:
                 heuristic_times[name].append(np.mean(run_times))
 
         all_times = {**exact_times, **heuristic_times}
-        visualization_evo.plot_scalability_lines(
+        visualization.plot_scalability_lines(
             self.sizes, all_times,
             f"TSP Scalability: {' vs '.join(all_times.keys())}",
-            f"tsp_scalability_{'_'.join(self.algorithm_names)}",
+            f"tsp/scalability/tsp_scalability_{'_'.join(self.algorithm_names)}",
             "Number of Cities", "Execution Time (s)"
         )
 
     def _quality_vs_optimal(self):
         print("\n[2] QUALITY vs OPTIMAL")
         n = self.sizes[-1]
-        cities = problems_evo.generate_cities(n, seed=100)
-        dist = problems_evo.calculate_distance_matrix(cities)
+        cities = problems.generate_cities(n, seed=100)
+        dist = problems.calculate_distance_matrix(cities)
 
         solver = TSPGraphSearch(n, dist)
         optimal_cost = solver.a_star()
@@ -349,15 +348,15 @@ class TSPComparison:
 
         scores_for_plot = {**all_scores, 'Exact (Fixed)': [optimal_cost] * self.runs}
 
-        visualization_evo.plot_robustness_convergence(
+        visualization.plot_robustness_convergence(
             all_histories,
             f"TSP Convergence: {' vs '.join(self.algorithm_names)}",
-            f"tsp_convergence_{'_'.join(self.algorithm_names)}"
+            f"tsp/convergence/tsp_convergence_{'_'.join(self.algorithm_names)}"
         )
-        visualization_evo.plot_boxplot_comparison(
+        visualization.plot_boxplot_comparison(
             scores_for_plot,
             f"TSP Quality: {' vs '.join(self.algorithm_names)} vs Exact",
-            f"tsp_quality_{'_'.join(self.algorithm_names)}",
+            f"tsp/quality/tsp_quality_{'_'.join(self.algorithm_names)}",
             ylabel="Path Cost"
         )
 
@@ -366,10 +365,10 @@ class TSPComparison:
             t = manual_onesample_ttest(all_scores[name], optimal_cost)
             print(f"  [{name}] Mean={mean:.2f}, Gap={((mean-optimal_cost)/optimal_cost*100):.2f}%, t={t:.4f}")
             if best_routes[name] is not None:
-                visualization_evo.plot_tsp_route(
+                visualization.plot_tsp_route(
                     cities, best_routes[name],
                     f"{name} Best Route (Cost {best_costs[name]:.2f})",
-                    f"tsp_best_route_{name.lower()}"
+                    f"tsp/routes/tsp_best_route_{name.lower()}"
                 )
 
     def _sensitivity(self):
@@ -380,8 +379,8 @@ class TSPComparison:
         pop_sizes = [20, 50, 100]
         results = np.zeros((len(mut_rates), len(pop_sizes)))
         n = self.sizes[-1]
-        cities = problems_evo.generate_cities(n, seed=99)
-        dist = problems_evo.calculate_distance_matrix(cities)
+        cities = problems.generate_cities(n, seed=99)
+        dist = problems.calculate_distance_matrix(cities)
 
         for i, mr in enumerate(mut_rates):
             for j, ps in enumerate(pop_sizes):
@@ -392,8 +391,8 @@ class TSPComparison:
                     costs.append(c)
                 results[i, j] = np.mean(costs)
 
-        visualization_evo.plot_parameter_sensitivity(
-            results, pop_sizes, mut_rates, "GA Sensitivity Analysis", "tsp_sensitivity",
+        visualization.plot_parameter_sensitivity(
+            results, pop_sizes, mut_rates, "GA Sensitivity Analysis", "tsp/sensitivity/tsp_sensitivity",
             "Population Size", "Mutation Rate"
         )
 
@@ -405,7 +404,7 @@ def run_exploration_visualization(algorithm_names=None, problem_name="Rastrigin"
     """Plot 3D landscape trajectories"""
     algorithm_names = algorithm_names or list(CONTINUOUS_ALGORITHMS.keys())
     bounds_2d = [[-5.12, 5.12], [-5.12, 5.12]]
-    func = problems_evo.rastrigin_function
+    func = problems.rastrigin_function
 
     paths = {}
     for name in algorithm_names:
@@ -422,10 +421,10 @@ def run_exploration_visualization(algorithm_names=None, problem_name="Rastrigin"
             _, _, _, path = cs.optimize(iterations=20)
             paths["CS (Levy Flights)"] = path
 
-    visualization_evo.plot_3d_landscape_path(
+    visualization.plot_3d_landscape_path(
         func, bounds_2d, paths,
         "Trajectory Comparison: Rastrigin",
-        "cont_3d_rastrigin_comparison"
+        "continuous/3d/cont_3d_rastrigin_comparison"
     )
 
 

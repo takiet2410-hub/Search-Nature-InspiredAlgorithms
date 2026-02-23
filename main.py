@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import time
-from src.utils import problems_evo, visualization_evo
+from src.utils import problems, visualization
 
 # Import Algorithms
 from src.algorithms.evolution.genetic_algorithm import GeneticAlgorithmTSP
@@ -61,8 +61,8 @@ class TSPExperiment:
         
         for n in sizes:
             print(f"-> Running Size N={n}...")
-            cities = problems_evo.generate_cities(n, seed=42)
-            dist = problems_evo.calculate_distance_matrix(cities)
+            cities = problems.generate_cities(n, seed=42)
+            dist = problems.calculate_distance_matrix(cities)
             solver = TSPGraphSearch(n, dist)
             
             # 1. BFS
@@ -92,7 +92,7 @@ class TSPExperiment:
             print(f"   Time: BFS={times['BFS'][-1]:.3f}s, DFS={times['DFS'][-1]:.3f}s, A*={times['A* (Exact)'][-1]:.3f}s, GA={times['GA (Approx)'][-1]:.3f}s")
             
         # Vẽ biểu đồ 4 đường
-        visualization_evo.plot_scalability_lines(
+        visualization.plot_scalability_lines(
             sizes, times,
             "TSP Scalability: Full Comparison (BFS, DFS, A*, GA)", 
             "tsp_scalability_full",
@@ -103,8 +103,8 @@ class TSPExperiment:
         print("\n[2] ROBUSTNESS & CONVERGENCE (GA Focus)")
         # Với N=10, so sánh GA với Optimal (A*)
         n = 10
-        cities = problems_evo.generate_cities(n, seed=100)
-        dist = problems_evo.calculate_distance_matrix(cities)
+        cities = problems.generate_cities(n, seed=100)
+        dist = problems.calculate_distance_matrix(cities)
         
         # Ground Truth (A*)
         solver = TSPGraphSearch(n, dist)
@@ -127,7 +127,7 @@ class TSPExperiment:
                 best_route = route
         
         # Visualization 1: Convergence của GA (Yêu cầu giữ lại)
-        visualization_evo.plot_robustness_convergence(
+        visualization.plot_robustness_convergence(
             {'GA Convergence': ga_histories}, 
             "GA Convergence Speed (over 30 runs)", 
             "tsp_convergence_ga_only"
@@ -135,7 +135,7 @@ class TSPExperiment:
         
         # Visualization 2: Boxplot so sánh chất lượng (GA vs Optimal Line)
         # Vì BFS, DFS, A* đều ra cùng 1 số Optimal, ta gom chung là "Exact Methods"
-        visualization_evo.plot_boxplot_comparison(
+        visualization.plot_boxplot_comparison(
             {'GA (30 runs)': ga_costs, 'Exact Methods (Fixed)': [optimal_cost]*30},
             "Solution Quality: GA vs Exact Methods", 
             "tsp_quality_boxplot", 
@@ -143,7 +143,7 @@ class TSPExperiment:
         )
         
         # Visualization 3: Best Route
-        visualization_evo.plot_tsp_route(cities, best_route, f"GA Best Route (Cost {min_ga_cost:.2f})", "tsp_best_route")
+        visualization.plot_tsp_route(cities, best_route, f"GA Best Route (Cost {min_ga_cost:.2f})", "tsp_best_route")
 
         # Stats
         mean_ga = np.mean(ga_costs)
@@ -158,8 +158,8 @@ class TSPExperiment:
         results = np.zeros((len(mut_rates), len(pop_sizes)))
         
         n = 10
-        cities = problems_evo.generate_cities(n, seed=99)
-        dist = problems_evo.calculate_distance_matrix(cities)
+        cities = problems.generate_cities(n, seed=99)
+        dist = problems.calculate_distance_matrix(cities)
         
         for i, mr in enumerate(mut_rates):
             for j, ps in enumerate(pop_sizes):
@@ -170,7 +170,7 @@ class TSPExperiment:
                     costs.append(c)
                 results[i, j] = np.mean(costs)
                 
-        visualization_evo.plot_parameter_sensitivity(
+        visualization.plot_parameter_sensitivity(
             results, pop_sizes, mut_rates, "GA Sensitivity Analysis", "tsp_sensitivity",
             "Population Size", "Mutation Rate"
         )
@@ -193,7 +193,7 @@ class ContinuousExperiment:
         # 1. Chạy so sánh trên hàm Sphere (Bài toán DỄ - Unimodal)
         self.run_comparison_on_function(
             func_name="Sphere",
-            func=problems_evo.sphere_function,
+            func=problems.sphere_function,
             bounds=[[-5.12, 5.12]] * 10, # 10 chiều
             generations=50
         )
@@ -201,7 +201,7 @@ class ContinuousExperiment:
         # 2. Chạy so sánh trên hàm Rastrigin (Bài toán KHÓ - Multimodal)
         self.run_comparison_on_function(
             func_name="Rastrigin",
-            func=problems_evo.rastrigin_function,
+            func=problems.rastrigin_function,
             bounds=[[-5.12, 5.12]] * 10, # 10 chiều
             generations=100
         )
@@ -249,14 +249,14 @@ class ContinuousExperiment:
             
         # --- VẼ BIỂU ĐỒ ---
         # 1. Convergence (Tốc độ hội tụ)
-        visualization_evo.plot_robustness_convergence(
+        visualization.plot_robustness_convergence(
             {'DE': hist_de_all, 'HC': hist_hc_all, 'CS': hist_cs_all}, 
             f"Convergence: DE vs HC on {func_name}", 
             f"cont_{func_name.lower()}_convergence"
         )
         
         # 2. Quality (Boxplot)
-        visualization_evo.plot_boxplot_comparison(
+        visualization.plot_boxplot_comparison(
             {'DE': scores_de, 'HC': scores_hc, 'CS': scores_cs}, 
             f"Quality Distribution on {func_name}", 
             f"cont_{func_name.lower()}_boxplot"
@@ -278,7 +278,7 @@ class ContinuousExperiment:
         print("\n[3] EXPLORATION vs EXPLOITATION (3D Visualization)")
         # Chỉ vẽ Rastrigin vì Sphere quá đơn giản (cái bát)
         bounds = [[-5.12, 5.12]] * 2 
-        func = problems_evo.rastrigin_function
+        func = problems.rastrigin_function
         
         # HC
         hc = ContinuousLocalSearch(step_size=0.2, max_iter=100) 
@@ -292,7 +292,7 @@ class ContinuousExperiment:
         _, _, _, path_cs = cs.optimize(iterations=20)
 
         # Vẽ
-        visualization_evo.plot_3d_landscape_path(
+        visualization.plot_3d_landscape_path(
             func, bounds, 
             {
                 'DE (Exploration)': path_de,
@@ -310,7 +310,7 @@ class ContinuousExperiment:
         
         for d in dims:
             bounds = [[-5.12, 5.12]] * d
-            func = problems_evo.rastrigin_function
+            func = problems.rastrigin_function
             
             # DE
             s = time.time()
@@ -330,7 +330,7 @@ class ContinuousExperiment:
             cs.optimize(iterations=50)
             times['CS'].append(time.time() - s)
             
-        visualization_evo.plot_scalability_lines(
+        visualization.plot_scalability_lines(
             dims, times, 
             "Scalability: DE vs HC vs CS on Rastrigin Function (Time)", "cont_scalability_time",
             "Dimensions (D)", "Execution Time (s)"
@@ -348,12 +348,12 @@ class ContinuousExperiment:
             for j, cr in enumerate(CR_vals):
                 scores = []
                 for _ in range(5):
-                    de = DifferentialEvolution(problems_evo.rastrigin_function, bounds, pop_size=30, mutation_factor=f, crossover_rate=cr)
+                    de = DifferentialEvolution(problems.rastrigin_function, bounds, pop_size=30, mutation_factor=f, crossover_rate=cr)
                     _, s, _, _ = de.optimize(generations=50)
                     scores.append(s)
                 results[i, j] = np.mean(scores)
                 
-        visualization_evo.plot_parameter_sensitivity(
+        visualization.plot_parameter_sensitivity(
             results, CR_vals, F_vals, "DE Sensitivity Analysis on Rastrigin Function", "cont_sensitivity",
             "Crossover Rate (CR)", "Mutation Factor (F)"
         )
@@ -368,14 +368,14 @@ class ContinuousExperiment:
                 scores = []
                 for _ in range(5):
                     cs = CuckooSearch(
-                        problems_evo.rastrigin_function, bounds,
+                        problems.rastrigin_function, bounds,
                         n_nests=30, pa=pa, alpha=alpha, beta=1.5
                     )
                     _, s, _, _ = cs.optimize(iterations=50)
                     scores.append(s)
                 cs_results[i, j] = np.mean(scores)
 
-        visualization_evo.plot_parameter_sensitivity(
+        visualization.plot_parameter_sensitivity(
             cs_results, pa_vals, alpha_vals,
             "Cuckoo Search Sensitivity on Rastrigin Function",
             "cont_sensitivity_cs",
