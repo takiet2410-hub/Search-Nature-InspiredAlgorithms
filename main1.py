@@ -7,7 +7,7 @@ from src.utils import problems, visualization
 from src.algorithms.evolution.genetic_algorithm import GeneticAlgorithmTSP
 from src.algorithms.evolution.differential_evolution import DifferentialEvolution
 from src.algorithms.biology.cuckoo_search import CuckooSearch
-from src.algorithms.classical.baselines_evo import TSPGraphSearch, ContinuousLocalSearch
+from src.algorithms.classical.baselines import TSPGraphSearch, ContinuousLocalSearch
 
 # =============================================================================
 # HELPERS
@@ -34,7 +34,7 @@ def manual_twosample_ttest(sample1, sample2):
 # Each entry returns (score, history, path) given (func, bounds, generations)
 # =============================================================================
 CONTINUOUS_ALGORITHMS = {}
-TSP_ALGORITHMS = {}
+DISCRETE_ALGORITHMS = {}
 
 def register_continuous(name):
     """Decorator to register a continuous optimization algorithm runner."""
@@ -46,7 +46,7 @@ def register_continuous(name):
 def register_tsp(name):
     """Decorator to register a TSP algorithm runner."""
     def decorator(fn):
-        TSP_ALGORITHMS[name] = fn
+        DISCRETE_ALGORITHMS[name] = fn
         return fn
     return decorator
 
@@ -120,6 +120,13 @@ CONTINUOUS_PROBLEMS = {
     # },
 }
 
+DISCRETE_PROBLEMS = {
+    "TSP": {
+        "sizes": [8, 9, 10],
+        "generate_fn": problems.generate_cities,
+        "dist_fn": problems.calculate_distance_matrix,
+    },
+}
 
 # =============================================================================
 # GENERIC COMPARISON ENGINE
@@ -201,7 +208,6 @@ class ContinuousComparison:
 
 
     def _scalability_dimensions(self):
-        """Replicates ContinuousExperiment.metric_scalability_dimensions from main.py"""
         print("\n[SCALABILITY] Time vs Dimensions on Rastrigin")
         dims = [2, 5, 10, 20]
         times = {name: [] for name in self.algorithm_names}
@@ -211,23 +217,18 @@ class ContinuousComparison:
             func = problems.rastrigin_function
             for name in self.algorithm_names:
                 s = time.time()
-                # Use fixed pop_size=30 and fixed HC budget to match main.py behavior
-                if name == "HC":
-                    hc = ContinuousLocalSearch(step_size=0.5, max_iter=1500)
-                    hc.hill_climbing(func, bounds)
-                else:
-                    CONTINUOUS_ALGORITHMS[name](func, bounds, generations=50, pop_size=30)
+                CONTINUOUS_ALGORITHMS[name](func, bounds, generations=50, pop_size=30)
                 times[name].append(time.time() - s)
 
+        tag = '_vs_'.join(self.algorithm_names)
         visualization.plot_scalability_lines(
             dims, times,
             f"Scalability: {' vs '.join(self.algorithm_names)} on Rastrigin (Time)",
-            "continuous/scalability/cont_scalability_time",
+            f"continuous/scalability/cont_scalability_time_{tag}",
             "Dimensions (D)", "Execution Time (s)"
         )
 
     def _sensitivity_continuous(self):
-        """Replicates metric_sensitivity for DE and CS from main.py"""
         bounds = [[-5.12, 5.12]] * 10
         func = problems.rastrigin_function
 
@@ -271,20 +272,20 @@ class ContinuousComparison:
             )
 
 
-class TSPComparison:
+class DiscreteComparison:
     """
     Runs any subset of registered TSP heuristics vs exact solvers on configurable city sizes.
     """
 
     def __init__(self, algorithm_names=None, sizes=None, runs=30, pop_size=50):
-        self.algorithm_names = algorithm_names or list(TSP_ALGORITHMS.keys())
+        self.algorithm_names = algorithm_names or list(DISCRETE_ALGORITHMS.keys())
         self.sizes = sizes or [8, 9, 10]
         self.runs = runs
         self.pop_size = pop_size
 
     def run_all(self):
         print("\n" + "#"*60)
-        print(f"TSP COMPARISON: {self.algorithm_names} | Sizes: {self.sizes}")
+        print(f"DISCRETE COMPARISON: {self.algorithm_names} | Sizes: {self.sizes}")
         print("#"*60)
 
         self._scalability()
@@ -310,15 +311,15 @@ class TSPComparison:
                 run_times = []
                 for _ in range(5):
                     s = time.time()
-                    TSP_ALGORITHMS[name](n, dist, generations=50, pop_size=self.pop_size)
+                    DISCRETE_ALGORITHMS[name](n, dist, generations=50, pop_size=self.pop_size)
                     run_times.append(time.time() - s)
                 heuristic_times[name].append(np.mean(run_times))
 
         all_times = {**exact_times, **heuristic_times}
         visualization.plot_scalability_lines(
             self.sizes, all_times,
-            f"TSP Scalability: {' vs '.join(all_times.keys())}",
-            f"tsp/scalability/tsp_scalability_{'_'.join(self.algorithm_names)}",
+            f"Discrete Scalability: {' vs '.join(all_times.keys())}",
+            f"discrete/scalability/tsp_scalability_{'_'.join(self.algorithm_names)}",
             "Number of Cities", "Execution Time (s)"
         )
 
@@ -339,7 +340,7 @@ class TSPComparison:
 
         for _ in range(self.runs):
             for name in self.algorithm_names:
-                cost, history, route = TSP_ALGORITHMS[name](n, dist, generations=100, pop_size=self.pop_size)
+                cost, history, route = DISCRETE_ALGORITHMS[name](n, dist, generations=100, pop_size=self.pop_size)
                 all_scores[name].append(cost)
                 all_histories[name].append(history)
                 if cost < best_costs[name]:
@@ -350,13 +351,13 @@ class TSPComparison:
 
         visualization.plot_robustness_convergence(
             all_histories,
-            f"TSP Convergence: {' vs '.join(self.algorithm_names)}",
-            f"tsp/convergence/tsp_convergence_{'_'.join(self.algorithm_names)}"
+            f"Discrete Convergence: {' vs '.join(self.algorithm_names)}",
+            f"discrete/convergence/tsp_convergence_{'_'.join(self.algorithm_names)}"
         )
         visualization.plot_boxplot_comparison(
             scores_for_plot,
-            f"TSP Quality: {' vs '.join(self.algorithm_names)} vs Exact",
-            f"tsp/quality/tsp_quality_{'_'.join(self.algorithm_names)}",
+            f"Discrete Quality: {' vs '.join(self.algorithm_names)} vs Exact",
+            f"discrete/quality/tsp_quality_{'_'.join(self.algorithm_names)}",
             ylabel="Path Cost"
         )
 
@@ -368,7 +369,7 @@ class TSPComparison:
                 visualization.plot_tsp_route(
                     cities, best_routes[name],
                     f"{name} Best Route (Cost {best_costs[name]:.2f})",
-                    f"tsp/routes/tsp_best_route_{name.lower()}"
+                    f"discrete/routes/tsp_best_route_{name.lower()}"
                 )
 
     def _sensitivity(self):
@@ -391,8 +392,11 @@ class TSPComparison:
                     costs.append(c)
                 results[i, j] = np.mean(costs)
 
+        tag = '_'.join(self.algorithm_names)
         visualization.plot_parameter_sensitivity(
-            results, pop_sizes, mut_rates, "GA Sensitivity Analysis", "tsp/sensitivity/tsp_sensitivity",
+            results, pop_sizes, mut_rates,
+            "GA Sensitivity Analysis",
+            f"discrete/sensitivity/tsp_sensitivity_{tag}",
             "Population Size", "Mutation Rate"
         )
 
@@ -421,10 +425,11 @@ def run_exploration_visualization(algorithm_names=None, problem_name="Rastrigin"
             _, _, _, path = cs.optimize(iterations=20)
             paths["CS (Levy Flights)"] = path
 
+    tag = '_vs_'.join(algorithm_names)
     visualization.plot_3d_landscape_path(
         func, bounds_2d, paths,
-        "Trajectory Comparison: Rastrigin",
-        "continuous/3d/cont_3d_rastrigin_comparison"
+        f"Trajectory Comparison: {' vs '.join(algorithm_names)}",
+        f"continuous/3d/cont_3d_{tag}_rastrigin"
     )
 
 
@@ -435,23 +440,25 @@ if __name__ == "__main__":
     if not os.path.exists('results/figures'):
         os.makedirs('results/figures')
 
-    # --- TSP Experiments ---
+    # --- Discrete Experiments ---
     # Compare only GA (default). To add ACO: register it above, then:
     # TSPComparison(algorithm_names=["GA", "ACO"]).run_all()
-    TSPComparison(algorithm_names=["GA"], sizes=[8, 9, 10]).run_all()
+
+    DiscreteComparison(algorithm_names=["GA"], sizes=[8, 9, 10]).run_all()
 
     # --- Continuous Experiments ---
     # All algorithms on all problems:
-    ContinuousComparison().run_all()
+    #ContinuousComparison().run_all()
 
-    # Custom: only DE vs CS on Rastrigin:
-    # ContinuousComparison(algorithm_names=["DE", "CS"], problem_names=["Rastrigin"]).run_all()
+    # Custom:
+    ContinuousComparison(algorithm_names=["DE", "HC"], problem_names=["Rastrigin"]).run_all()
+    ContinuousComparison(algorithm_names=["CS", "HC"], problem_names=["Rastrigin"]).run_all()
 
-    # 3D visualization
-    run_exploration_visualization(algorithm_names=["DE", "HC", "CS"], problem_name="Rastrigin")
+    # --- 3D visualization ---
+    run_exploration_visualization(algorithm_names=["DE", "HC"], problem_name="Rastrigin")
+    run_exploration_visualization(algorithm_names=["CS", "HC"], problem_name="Rastrigin")
 
     # Scalability & Sensitivity (still available as standalone)
-    cont = ContinuousComparison(algorithm_names=["DE", "HC", "CS"], problem_names=["Rastrigin"])
     # cont.run_all() already covers these; call individually if needed
 
     print("\n" + "="*60)

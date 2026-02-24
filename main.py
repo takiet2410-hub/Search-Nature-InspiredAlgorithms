@@ -7,7 +7,7 @@ from src.utils import problems, visualization
 from src.algorithms.evolution.genetic_algorithm import GeneticAlgorithmTSP
 from src.algorithms.evolution.differential_evolution import DifferentialEvolution
 from src.algorithms.biology.cuckoo_search import CuckooSearch
-from src.algorithms.classical.baselines_evo import TSPGraphSearch, ContinuousLocalSearch
+from src.algorithms.classical.baselines import TSPGraphSearch, ContinuousLocalSearch
 
 # --- HÀM THỐNG KÊ (NUMPY ONLY) ---
 def manual_onesample_ttest(sample, population_mean):
