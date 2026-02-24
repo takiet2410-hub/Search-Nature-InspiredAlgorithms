@@ -8,6 +8,7 @@ from src.algorithms.evolution.genetic_algorithm import GeneticAlgorithmTSP
 from src.algorithms.evolution.differential_evolution import DifferentialEvolution
 from src.algorithms.biology.cuckoo_search import CuckooSearch
 from src.algorithms.classical.baselines import TSPGraphSearch, ContinuousLocalSearch
+from src.algorithms.human.tlbo import TLBO
 
 # =============================================================================
 # HELPERS
@@ -71,6 +72,12 @@ def run_hc(func, bounds, generations, pop_size):
 def run_cs(func, bounds, generations, pop_size):
     cs = CuckooSearch(func, bounds, n_nests=pop_size, pa=0.25, alpha=0.01, beta=1.5)
     _, score, history, path = cs.optimize(iterations=generations)
+    return score, history, path
+
+@register_continuous("TLBO")
+def run_tlbo(func, bounds, generations, pop_size):
+    tlbo = TLBO(func, bounds, pop_size=pop_size)
+    _, score, history, path = tlbo.optimize(iterations=generations)
     return score, history, path
 
 # To add a new algorithm, just add a new block like this:
@@ -424,6 +431,10 @@ def run_exploration_visualization(algorithm_names=None, problem_name="Rastrigin"
             cs = CuckooSearch(func, bounds_2d, n_nests=20, pa=0.25, alpha=0.02)
             _, _, _, path = cs.optimize(iterations=20)
             paths["CS (Levy Flights)"] = path
+        elif name == "TLBO":
+            tlbo = TLBO(func, bounds_2d, pop_size=20)
+            _, _, _, path = tlbo.optimize(iterations=20)
+            paths["TLBO (Teacher-Learner)"] = path
 
     tag = '_vs_'.join(algorithm_names)
     visualization.plot_3d_landscape_path(
@@ -453,10 +464,27 @@ if __name__ == "__main__":
     # Custom:
     ContinuousComparison(algorithm_names=["DE", "HC"], problem_names=["Rastrigin"]).run_all()
     ContinuousComparison(algorithm_names=["CS", "HC"], problem_names=["Rastrigin"]).run_all()
+    ContinuousComparison(
+        algorithm_names=["DE", "TLBO"],
+        problem_names=["Sphere", "Rastrigin"],
+        runs=30
+    ).run_all()
+    ContinuousComparison(
+        algorithm_names=["CS", "TLBO"],
+        problem_names=["Sphere", "Rastrigin"],
+        runs=30
+    ).run_all()
+
+    ContinuousComparison(
+        algorithm_names=["DE", "CS", "HC", "TLBO"],
+        problem_names=["Sphere", "Rastrigin"],
+        runs=30
+    ).run_all()
 
     # --- 3D visualization ---
     run_exploration_visualization(algorithm_names=["DE", "HC"], problem_name="Rastrigin")
     run_exploration_visualization(algorithm_names=["CS", "HC"], problem_name="Rastrigin")
+    run_exploration_visualization(algorithm_names=["DE", "TLBO"], problem_name="Rastrigin")
 
     # Scalability & Sensitivity (still available as standalone)
     # cont.run_all() already covers these; call individually if needed
