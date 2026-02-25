@@ -4,13 +4,19 @@ import time
 from src.utils import problems, visualization
 
 # Import Algorithms
-from src.algorithms.evolution.genetic_algorithm import GeneticAlgorithmTSP
-from src.algorithms.evolution.differential_evolution import DifferentialEvolution
-from src.algorithms.biology.cuckoo_search import CuckooSearch
-from src.algorithms.biology.pso import ParticleSwarmOptimization
+# Bio
 from src.algorithms.biology.abc import ArtificialBeeColony
 from src.algorithms.biology.aco import AntColonyOptimizationTSP
+from src.algorithms.biology.cuckoo_search import CuckooSearch
+from src.algorithms.biology.fa import FireflyAlgorithm
+from src.algorithms.biology.pso import ParticleSwarmOptimization
+# Classical
 from src.algorithms.classical.baselines import TSPGraphSearch, ContinuousLocalSearch
+from src.algorithms.physics.sa import SimulatedAnnealing
+# Evo
+from src.algorithms.evolution.genetic_algorithm import GeneticAlgorithmTSP
+from src.algorithms.evolution.differential_evolution import DifferentialEvolution
+# Human
 from src.algorithms.human.tlbo import TLBO
 
 # =============================================================================
@@ -96,6 +102,36 @@ def run_abc(func, bounds, generations, pop_size):
     _, score, history, path = abc.optimize(iterations=generations)
     return score, history, path
 
+@register_continuous("FA")
+def run_fa(func, bounds, generations, pop_size):
+    fa = FireflyAlgorithm(
+        func, bounds,
+        n_fireflies=pop_size,
+        alpha=0.5,
+        beta0=1.0,
+        gamma=1.0,
+        alpha_decay=0.97,
+    )
+    _, score, history, path = fa.optimize(iterations=generations)
+    return score, history, path
+
+@register_continuous("SA")
+def run_sa_continuous(func, bounds, generations, pop_size):
+    # SA is single-solution; map pop_size * generations → max_iter so the
+    # total function-evaluation budget stays comparable to population methods.
+    sa = SimulatedAnnealing(
+        T_init=1000.0,
+        T_min=1e-3,
+        cooling_rate=0.995,
+        max_iter=generations * pop_size,
+    )
+    _, score, history, path = sa.optimize(func, bounds)
+    # Down-sample history to `generations` points so convergence plots share
+    # the same x-axis as population-based algorithms.
+    step = max(1, len(history) // generations)
+    sampled_history = history[::step][:generations]
+    return score, sampled_history, path
+
 
 # --- Register TSP Algorithms ---
 # Each runner signature: (n, dist, generations, pop_size) -> (score, history, route)
@@ -119,6 +155,21 @@ def run_aco_tsp(n, dist, generations, pop_size):
     )
     route, cost, history = aco.solve(iterations=generations)
     return cost, history, route
+
+@register_tsp("SA")
+def run_sa_tsp(n, dist, generations, pop_size):
+    # Increase max_iter so SA gets a comparable evaluation budget to GA/ACO.
+    sa = SimulatedAnnealing(
+        T_init=1000.0,
+        T_min=1e-3,
+        cooling_rate=0.995,
+        max_iter=generations * pop_size,
+    )
+    route, cost, history = sa.solve_tsp(n, dist)
+    # Down-sample to generations points to align convergence plots.
+    step = max(1, len(history) // generations)
+    sampled_history = history[::step][:generations]
+    return cost, sampled_history, route
 
 
 # =============================================================================
@@ -459,6 +510,14 @@ def run_exploration_visualization(algorithm_names=None, problem_name="Rastrigin"
             abc = ArtificialBeeColony(func, bounds_2d, colony_size=20)
             _, _, _, path = abc.optimize(iterations=20)
             paths["ABC (Bee Colony)"] = path
+        elif name == "SA":
+            sa = SimulatedAnnealing(T_init=1000.0, cooling_rate=0.98, max_iter=500)
+            _, _, _, path = sa.optimize(func, bounds_2d)
+            paths["SA (Annealing)"] = path
+        elif name == "FA":
+            fa = FireflyAlgorithm(func, bounds_2d, n_fireflies=20, gamma=0.5)
+            _, _, _, path = fa.optimize(iterations=20)
+            paths["FA (Firefly)"] = path
 
     tag = '_vs_'.join(algorithm_names)
     visualization.plot_3d_landscape_path(
@@ -478,9 +537,7 @@ if __name__ == "__main__":
     # --- Discrete Experiments ---
     # GA only (exact methods are the baseline inside DiscreteComparison)
     DiscreteComparison(algorithm_names=["GA"], sizes=[8, 9, 10]).run_all()
-
-    # GA + ACO head-to-head
-    DiscreteComparison(algorithm_names=["GA", "ACO"], sizes=[8, 9, 10]).run_all()
+    DiscreteComparison(algorithm_names=["GA", "ACO", "SA"], sizes=[8, 9, 10]).run_all()
 
     # --- Continuous Experiments ---
     # All algorithms on all problems:
@@ -500,7 +557,6 @@ if __name__ == "__main__":
         runs=30
     ).run_all()
 
-    # New pairwise: PSO and ABC vs existing algorithms
     ContinuousComparison(
         algorithm_names=["DE", "PSO"],
         problem_names=["Sphere", "Rastrigin"],
@@ -517,9 +573,46 @@ if __name__ == "__main__":
         runs=30
     ).run_all()
 
-    # Full 7-way comparison across all registered continuous algorithms
     ContinuousComparison(
-        algorithm_names=["DE", "CS", "HC", "TLBO", "PSO", "ABC"],
+        algorithm_names=["SA", "HC"],
+        problem_names=["Sphere", "Rastrigin"],
+        runs=30
+    ).run_all()
+
+    # SA vs population methods
+    ContinuousComparison(
+        algorithm_names=["SA", "DE", "PSO"],
+        problem_names=["Sphere", "Rastrigin"],
+        runs=30
+    ).run_all()
+
+    ContinuousComparison(
+        algorithm_names=["FA", "CS"],
+        problem_names=["Sphere", "Rastrigin"],
+        runs=30
+    ).run_all()
+
+    ContinuousComparison(
+        algorithm_names=["FA", "PSO"],
+        problem_names=["Sphere", "Rastrigin"],
+        runs=30
+    ).run_all()
+
+    ContinuousComparison(
+        algorithm_names=["FA", "ABC", "CS"],
+        problem_names=["Sphere", "Rastrigin"],
+        runs=30
+    ).run_all()
+
+    ContinuousComparison(
+        algorithm_names=["FA", "SA"],
+        problem_names=["Sphere", "Rastrigin"],
+        runs=30
+    ).run_all()
+
+    # All registered continuous algorithms
+    ContinuousComparison(
+        algorithm_names=["DE", "CS", "HC", "TLBO", "PSO", "ABC", "GA"],
         problem_names=["Sphere", "Rastrigin"],
         runs=30
     ).run_all()
@@ -530,9 +623,14 @@ if __name__ == "__main__":
     run_exploration_visualization(algorithm_names=["DE", "TLBO"], problem_name="Rastrigin")
     run_exploration_visualization(algorithm_names=["PSO", "HC"], problem_name="Rastrigin")
     run_exploration_visualization(algorithm_names=["ABC", "HC"], problem_name="Rastrigin")
-    # Full 6-way trajectory (only 3 colours in plot_3d_landscape_path — pick key 3)
+    run_exploration_visualization(algorithm_names=["SA", "HC", "DE"], problem_name="Rastrigin")
+    run_exploration_visualization(algorithm_names=["DE", "PSO", "ABC"], problem_name="Rastrigin")
     run_exploration_visualization(
-        algorithm_names=["DE", "PSO", "ABC"],
+        algorithm_names=["FA", "CS", "HC"],
+        problem_name="Rastrigin"
+    )
+    run_exploration_visualization(
+        algorithm_names=["FA", "PSO", "DE"],
         problem_name="Rastrigin"
     )
 
