@@ -7,6 +7,9 @@ from src.utils import problems, visualization
 from src.algorithms.evolution.genetic_algorithm import GeneticAlgorithmTSP
 from src.algorithms.evolution.differential_evolution import DifferentialEvolution
 from src.algorithms.biology.cuckoo_search import CuckooSearch
+from src.algorithms.biology.pso import ParticleSwarmOptimization
+from src.algorithms.biology.abc import ArtificialBeeColony
+from src.algorithms.biology.aco import AntColonyOptimizationTSP
 from src.algorithms.classical.baselines import TSPGraphSearch, ContinuousLocalSearch
 from src.algorithms.human.tlbo import TLBO
 
@@ -80,12 +83,18 @@ def run_tlbo(func, bounds, generations, pop_size):
     _, score, history, path = tlbo.optimize(iterations=generations)
     return score, history, path
 
-# To add a new algorithm, just add a new block like this:
-# @register_continuous("PSO")
-# def run_pso(func, bounds, generations, pop_size):
-#     pso = ParticleSwarmOptimization(func, bounds, n_particles=pop_size)
-#     _, score, history, path = pso.optimize(iterations=generations)
-#     return score, history, path
+@register_continuous("PSO")
+def run_pso(func, bounds, generations, pop_size):
+    pso = ParticleSwarmOptimization(func, bounds, num_particles=pop_size)
+    _, score, history, path = pso.optimize(iterations=generations)
+    return score, history, path
+
+@register_continuous("ABC")
+def run_abc(func, bounds, generations, pop_size):
+    # colony_size covers both employed + onlooker bees; pop_size maps naturally
+    abc = ArtificialBeeColony(func, bounds, colony_size=pop_size)
+    _, score, history, path = abc.optimize(iterations=generations)
+    return score, history, path
 
 
 # --- Register TSP Algorithms ---
@@ -97,12 +106,19 @@ def run_ga_tsp(n, dist, generations, pop_size):
     route, cost, history = ga.solve(generations=generations)
     return cost, history, route
 
-# To add a new TSP algorithm:
-# @register_tsp("ACO")
-# def run_aco_tsp(n, dist, generations, pop_size):
-#     aco = AntColonyOptimization(n, dist, n_ants=pop_size)
-#     route, cost, history = aco.solve(iterations=generations)
-#     return cost, history, route
+@register_tsp("ACO")
+def run_aco_tsp(n, dist, generations, pop_size):
+    # num_ants maps to pop_size; other params are sensible defaults
+    aco = AntColonyOptimizationTSP(
+        n, dist,
+        num_ants=pop_size,
+        alpha=1.0,
+        beta=3.0,
+        evaporation_rate=0.5,
+        Q=100.0
+    )
+    route, cost, history = aco.solve(iterations=generations)
+    return cost, history, route
 
 
 # =============================================================================
@@ -435,6 +451,14 @@ def run_exploration_visualization(algorithm_names=None, problem_name="Rastrigin"
             tlbo = TLBO(func, bounds_2d, pop_size=20)
             _, _, _, path = tlbo.optimize(iterations=20)
             paths["TLBO (Teacher-Learner)"] = path
+        elif name == "PSO":
+            pso = ParticleSwarmOptimization(func, bounds_2d, num_particles=20)
+            _, _, _, path = pso.optimize(iterations=20)
+            paths["PSO (Swarm)"] = path
+        elif name == "ABC":
+            abc = ArtificialBeeColony(func, bounds_2d, colony_size=20)
+            _, _, _, path = abc.optimize(iterations=20)
+            paths["ABC (Bee Colony)"] = path
 
     tag = '_vs_'.join(algorithm_names)
     visualization.plot_3d_landscape_path(
@@ -452,10 +476,11 @@ if __name__ == "__main__":
         os.makedirs('results/figures')
 
     # --- Discrete Experiments ---
-    # Compare only GA (default). To add ACO: register it above, then:
-    # TSPComparison(algorithm_names=["GA", "ACO"]).run_all()
-
+    # GA only (exact methods are the baseline inside DiscreteComparison)
     DiscreteComparison(algorithm_names=["GA"], sizes=[8, 9, 10]).run_all()
+
+    # GA + ACO head-to-head
+    DiscreteComparison(algorithm_names=["GA", "ACO"], sizes=[8, 9, 10]).run_all()
 
     # --- Continuous Experiments ---
     # All algorithms on all problems:
@@ -475,19 +500,41 @@ if __name__ == "__main__":
         runs=30
     ).run_all()
 
+    # New pairwise: PSO and ABC vs existing algorithms
     ContinuousComparison(
-        algorithm_names=["DE", "CS", "HC", "TLBO"],
+        algorithm_names=["DE", "PSO"],
+        problem_names=["Sphere", "Rastrigin"],
+        runs=30
+    ).run_all()
+    ContinuousComparison(
+        algorithm_names=["DE", "ABC"],
+        problem_names=["Sphere", "Rastrigin"],
+        runs=30
+    ).run_all()
+    ContinuousComparison(
+        algorithm_names=["PSO", "ABC", "CS"],
         problem_names=["Sphere", "Rastrigin"],
         runs=30
     ).run_all()
 
-    # --- 3D visualization ---
+    # Full 7-way comparison across all registered continuous algorithms
+    ContinuousComparison(
+        algorithm_names=["DE", "CS", "HC", "TLBO", "PSO", "ABC"],
+        problem_names=["Sphere", "Rastrigin"],
+        runs=30
+    ).run_all()
+
+    # --- 3D Trajectory Visualizations ---
     run_exploration_visualization(algorithm_names=["DE", "HC"], problem_name="Rastrigin")
     run_exploration_visualization(algorithm_names=["CS", "HC"], problem_name="Rastrigin")
     run_exploration_visualization(algorithm_names=["DE", "TLBO"], problem_name="Rastrigin")
-
-    # Scalability & Sensitivity (still available as standalone)
-    # cont.run_all() already covers these; call individually if needed
+    run_exploration_visualization(algorithm_names=["PSO", "HC"], problem_name="Rastrigin")
+    run_exploration_visualization(algorithm_names=["ABC", "HC"], problem_name="Rastrigin")
+    # Full 6-way trajectory (only 3 colours in plot_3d_landscape_path — pick key 3)
+    run_exploration_visualization(
+        algorithm_names=["DE", "PSO", "ABC"],
+        problem_name="Rastrigin"
+    )
 
     print("\n" + "="*60)
     print("HOÀN THÀNH. KIỂM TRA FOLDER RESULTS/FIGURES.")
