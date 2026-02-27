@@ -336,8 +336,8 @@ CONTINUOUS_PROBLEMS = {
 # =============================================================================
 class ContinuousComparison:
     """
-    Runs any subset of registered algorithms on any subset of registered problems.
-    Add algorithms via @register_continuous. Add problems to CONTINUOUS_PROBLEMS.
+    Chạy 8 thuật toán Meta-heuristic & Search trên 5 hàm số liên tục.
+    Tự động xuất Quality, Convergence, Scalability, và Sensitivity vào đúng folder.
     """
 
     def __init__(self, algorithm_names=None, problem_names=None, runs=30, pop_size=50):
@@ -352,14 +352,17 @@ class ContinuousComparison:
         print(f"PROBLEMS: {self.problem_names}")
         print("#"*60)
 
+        # Chạy TẤT CẢ tiêu chí cho TỪNG BÀI TOÁN để gom chung vào 1 folder
         for prob_name in self.problem_names:
+            print(f"\n{'='*40}")
+            print(f"🚀 ĐANG XỬ LÝ BÀI TOÁN: {prob_name.upper()}")
+            print(f"{'='*40}")
             self._run_on_problem(prob_name)
-
-        self._scalability_dimensions()
-        self._sensitivity_continuous()
+            self._scalability_dimensions(prob_name)
+            self._sensitivity_continuous(prob_name)
 
     def _run_on_problem(self, prob_name):
-        print(f"\n>>> PROBLEM: {prob_name} <<<")
+        print(f"\n[1] QUALITY & CONVERGENCE - {prob_name}")
         config = CONTINUOUS_PROBLEMS[prob_name]
         func = config["func"]
         bounds = config["bounds"]
@@ -376,241 +379,120 @@ class ContinuousComparison:
                 all_histories[name].append(history)
 
         tag = f"cont_{prob_name.lower()}_{'_vs_'.join(self.algorithm_names)}"
-        
-        # --- LƯU VÀO FOLDER TÊN HÀM ---
         folder_path = f"continuous/{prob_name.lower()}"
 
-        # Convergence plot
         visualization.plot_robustness_convergence(
-            all_histories,
-            f"Convergence on {prob_name}: {' vs '.join(self.algorithm_names)}",
-            f"{folder_path}/{tag}_convergence"
+            all_histories, f"Convergence on {prob_name}", f"{folder_path}/{tag}_convergence"
         )
-
-        # Boxplot
         visualization.plot_boxplot_comparison(
-            all_scores,
-            f"Quality on {prob_name}: {' vs '.join(self.algorithm_names)}",
-            f"{folder_path}/{tag}_boxplot"
+            all_scores, f"Quality on {prob_name}", f"{folder_path}/{tag}_boxplot"
         )
-
-        # --- CSV EXPORT ---
         save_scores_csv(all_scores, f"{tag}_scores.csv", subdir=folder_path)
         save_convergence_csv(all_histories, f"{tag}_convergence.csv", subdir=folder_path)
 
-        # Stats
-        names = self.algorithm_names
-        for name in names:
-            print(f"  [{name}] Mean={np.mean(all_scores[name]):.4f}, Std={np.std(all_scores[name]):.4f}")
-
-        for i in range(len(names)):
-            for j in range(i + 1, len(names)):
-                t = manual_twosample_ttest(all_scores[names[i]], all_scores[names[j]])
-                print(f"  T-Test ({names[i]} vs {names[j]}): t={t:.4f}")
-
-    def _scalability_dimensions(self):
-        print("\n[SCALABILITY] Time vs Dimensions on Rastrigin")
+    def _scalability_dimensions(self, prob_name):
+        print(f"\n[2] SCALABILITY (Time vs Dimensions) - {prob_name}")
         dims = [2, 5, 10, 20]
         times = {name: [] for name in self.algorithm_names}
+        
+        config = CONTINUOUS_PROBLEMS[prob_name]
+        func = config["func"]
+        base_bound = config["bounds"][0] # Lấy khoảng giá trị gốc (vd: [-5.12, 5.12])
 
         for d in dims:
-            bounds = [[-5.12, 5.12]] * d
-            func = problems.rastrigin_function
+            bounds = [base_bound] * d # Tự động tạo không gian D-chiều
             for name in self.algorithm_names:
                 s = time.time()
                 CONTINUOUS_ALGORITHMS[name](func, bounds, generations=50, pop_size=30)
                 times[name].append(time.time() - s)
 
-        tag = '_vs_'.join(self.algorithm_names)
-        folder_path = "continuous/rastrigin" # Gom chung vào rastrigin
+        folder_path = f"continuous/{prob_name.lower()}"
+        tag = f"cont_{prob_name.lower()}_scalability_all"
+        
         visualization.plot_scalability_lines(
-            dims, times,
-            f"Scalability: {' vs '.join(self.algorithm_names)} on Rastrigin (Time)",
-            f"{folder_path}/cont_scalability_time_{tag}",
-            "Dimensions (D)", "Execution Time (s)"
+            dims, times, f"Scalability on {prob_name} (All Algorithms)", f"{folder_path}/{tag}", "Dimensions (D)", "Execution Time (s)"
         )
-        save_scalability_csv(dims, times, f"cont_scalability_{tag}.csv",
-                             'Dimensions', subdir=folder_path)
+        save_scalability_csv(dims, times, f"{tag}.csv", 'Dimensions', subdir=folder_path)
 
-    # ------------------------------------------------------------------
-    # SENSITIVITY ANALYSES — All Algorithms
-    # ------------------------------------------------------------------
-    def _sensitivity_continuous(self):
-        bounds = [[-5.12, 5.12]] * 10
-        func = problems.rastrigin_function
+    def _sensitivity_continuous(self, prob_name):
+        print(f"\n[3] SENSITIVITY ANALYSIS - {prob_name}")
+        config = CONTINUOUS_PROBLEMS[prob_name]
+        func = config["func"]
+        bounds = config["bounds"]
+        folder = f"continuous/{prob_name.lower()}"
+        
+        # Để chạy nhanh 5 hàm x 8 thuật toán, tôi cấu hình lặp range(3) cho Heatmap
+        
+        if "HC" in self.algorithm_names:
+            print("  -> HC Sensitivity...")
+            step_sizes, max_iters = [0.1, 0.5, 1.0], [500, 1500, 3000]
+            res = np.zeros((len(step_sizes), len(max_iters)))
+            for i, ss in enumerate(step_sizes):
+                for j, mi in enumerate(max_iters):
+                    res[i,j] = np.mean([ContinuousLocalSearch(step_size=ss, max_iter=mi).hill_climbing(func, bounds)[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, max_iters, step_sizes, f"HC Sensitivity on {prob_name}", f"{folder}/cont_sens_hc", "Max Iterations", "Step Size")
 
-        # --- DE sensitivity (F vs CR) ---
         if "DE" in self.algorithm_names:
-            print("\n[SENSITIVITY] DE on Rastrigin (F vs CR)")
-            F_vals = [0.3, 0.5, 0.9]
-            CR_vals = [0.1, 0.5, 0.9]
-            results = np.zeros((len(F_vals), len(CR_vals)))
+            print("  -> DE Sensitivity...")
+            F_vals, CR_vals = [0.3, 0.5, 0.9], [0.1, 0.5, 0.9]
+            res = np.zeros((len(F_vals), len(CR_vals)))
             for i, f in enumerate(F_vals):
                 for j, cr in enumerate(CR_vals):
-                    scores = []
-                    for _ in range(5):
-                        de = DifferentialEvolution(func, bounds, pop_size=30,
-                                                   mutation_factor=f, crossover_rate=cr)
-                        _, s, _, _ = de.optimize(generations=50)
-                        scores.append(s)
-                    results[i, j] = np.mean(scores)
-            visualization.plot_parameter_sensitivity(
-                results, CR_vals, F_vals,
-                "DE Sensitivity Analysis on Rastrigin",
-                "continuous/sensitivity/cont_sensitivity_de",
-                "Crossover Rate (CR)", "Mutation Factor (F)"
-            )
-            save_sensitivity_csv(results, CR_vals, F_vals,
-                                 'sensitivity_de.csv', 'CR', 'F',
-                                 subdir='continuous/sensitivity')
+                    res[i,j] = np.mean([DifferentialEvolution(func, bounds, pop_size=30, mutation_factor=f, crossover_rate=cr).optimize(generations=30)[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, CR_vals, F_vals, f"DE Sensitivity on {prob_name}", f"{folder}/cont_sens_de", "Crossover Rate (CR)", "Mutation Factor (F)")
 
-        # --- CS sensitivity (alpha vs pa) ---
-        if "CS" in self.algorithm_names:
-            print("\n[SENSITIVITY] CS on Rastrigin (alpha vs pa)")
-            alpha_vals = [0.005, 0.01, 0.05]
-            pa_vals = [0.1, 0.25, 0.4]
-            cs_results = np.zeros((len(alpha_vals), len(pa_vals)))
-            for i, alpha in enumerate(alpha_vals):
-                for j, pa in enumerate(pa_vals):
-                    scores = []
-                    for _ in range(5):
-                        cs = CuckooSearch(func, bounds, n_nests=30, pa=pa,
-                                          alpha=alpha, beta=1.5)
-                        _, s, _, _ = cs.optimize(iterations=50)
-                        scores.append(s)
-                    cs_results[i, j] = np.mean(scores)
-            visualization.plot_parameter_sensitivity(
-                cs_results, pa_vals, alpha_vals,
-                "Cuckoo Search Sensitivity on Rastrigin",
-                "continuous/sensitivity/cont_sensitivity_cs",
-                "Abandonment Probability (pa)", "Step Size (alpha)"
-            )
-            save_sensitivity_csv(cs_results, pa_vals, alpha_vals,
-                                 'sensitivity_cs.csv', 'pa', 'alpha',
-                                 subdir='continuous/sensitivity')
-
-        # --- PSO sensitivity (w vs c1=c2) ---
         if "PSO" in self.algorithm_names:
-            print("\n[SENSITIVITY] PSO on Rastrigin (w vs c)")
-            w_vals = [0.4, 0.7, 0.9]
-            c_vals = [1.0, 1.5, 2.0]
-            pso_results = np.zeros((len(w_vals), len(c_vals)))
+            print("  -> PSO Sensitivity...")
+            w_vals, c_vals = [0.4, 0.7, 0.9], [1.0, 1.5, 2.0]
+            res = np.zeros((len(w_vals), len(c_vals)))
             for i, w in enumerate(w_vals):
                 for j, c in enumerate(c_vals):
-                    scores = []
-                    for _ in range(5):
-                        pso = ParticleSwarmOptimization(func, bounds,
-                                                        num_particles=30, w=w, c1=c, c2=c)
-                        _, s, _, _ = pso.optimize(iterations=50)
-                        scores.append(s)
-                    pso_results[i, j] = np.mean(scores)
-            visualization.plot_parameter_sensitivity(
-                pso_results, c_vals, w_vals,
-                "PSO Sensitivity on Rastrigin",
-                "continuous/sensitivity/cont_sensitivity_pso",
-                "Cognitive/Social Coeff (c1=c2)", "Inertia Weight (w)"
-            )
-            save_sensitivity_csv(pso_results, c_vals, w_vals,
-                                 'sensitivity_pso.csv', 'c', 'w',
-                                 subdir='continuous/sensitivity')
+                    res[i,j] = np.mean([ParticleSwarmOptimization(func, bounds, num_particles=30, w=w, c1=c, c2=c).optimize(iterations=30)[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, c_vals, w_vals, f"PSO Sensitivity on {prob_name}", f"{folder}/cont_sens_pso", "c1=c2", "Inertia Weight (w)")
 
-        # --- ABC sensitivity (colony_size vs limit) ---
         if "ABC" in self.algorithm_names:
-            print("\n[SENSITIVITY] ABC on Rastrigin (colony_size vs limit)")
-            colony_vals = [20, 40, 60]
-            limit_vals = [50, 100, 200]
-            abc_results = np.zeros((len(colony_vals), len(limit_vals)))
-            for i, cs_val in enumerate(colony_vals):
-                for j, lim in enumerate(limit_vals):
-                    scores = []
-                    for _ in range(5):
-                        abc = ArtificialBeeColony(func, bounds,
-                                                   colony_size=cs_val, limit=lim)
-                        _, s, _, _ = abc.optimize(iterations=50)
-                        scores.append(s)
-                    abc_results[i, j] = np.mean(scores)
-            visualization.plot_parameter_sensitivity(
-                abc_results, limit_vals, colony_vals,
-                "ABC Sensitivity on Rastrigin",
-                "continuous/sensitivity/cont_sensitivity_abc",
-                "Abandon Limit", "Colony Size"
-            )
-            save_sensitivity_csv(abc_results, limit_vals, colony_vals,
-                                 'sensitivity_abc.csv', 'limit', 'colony_size',
-                                 subdir='continuous/sensitivity')
+            print("  -> ABC Sensitivity...")
+            col_vals, lim_vals = [20, 40, 60], [50, 100, 200]
+            res = np.zeros((len(col_vals), len(lim_vals)))
+            for i, cs_val in enumerate(col_vals):
+                for j, lim in enumerate(lim_vals):
+                    res[i,j] = np.mean([ArtificialBeeColony(func, bounds, colony_size=cs_val, limit=lim).optimize(iterations=30)[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, lim_vals, col_vals, f"ABC Sensitivity on {prob_name}", f"{folder}/cont_sens_abc", "Limit", "Colony Size")
 
-        # --- FA sensitivity (alpha vs gamma) ---
         if "FA" in self.algorithm_names:
-            print("\n[SENSITIVITY] FA on Rastrigin (alpha vs gamma)")
-            fa_alpha_vals = [0.1, 0.5, 1.0]
-            fa_gamma_vals = [0.5, 1.0, 2.0]
-            fa_results = np.zeros((len(fa_alpha_vals), len(fa_gamma_vals)))
-            for i, a in enumerate(fa_alpha_vals):
-                for j, g in enumerate(fa_gamma_vals):
-                    scores = []
-                    for _ in range(5):
-                        fa = FireflyAlgorithm(func, bounds, n_fireflies=30,
-                                              alpha=a, gamma=g)
-                        _, s, _, _ = fa.optimize(iterations=50)
-                        scores.append(s)
-                    fa_results[i, j] = np.mean(scores)
-            visualization.plot_parameter_sensitivity(
-                fa_results, fa_gamma_vals, fa_alpha_vals,
-                "FA Sensitivity on Rastrigin",
-                "continuous/sensitivity/cont_sensitivity_fa",
-                "Absorption Coeff (gamma)", "Randomization (alpha)"
-            )
-            save_sensitivity_csv(fa_results, fa_gamma_vals, fa_alpha_vals,
-                                 'sensitivity_fa.csv', 'gamma', 'alpha',
-                                 subdir='continuous/sensitivity')
+            print("  -> FA Sensitivity...")
+            a_vals, g_vals = [0.1, 0.5, 1.0], [0.5, 1.0, 2.0]
+            res = np.zeros((len(a_vals), len(g_vals)))
+            for i, a in enumerate(a_vals):
+                for j, g in enumerate(g_vals):
+                    res[i,j] = np.mean([FireflyAlgorithm(func, bounds, n_fireflies=30, alpha=a, gamma=g).optimize(iterations=30)[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, g_vals, a_vals, f"FA Sensitivity on {prob_name}", f"{folder}/cont_sens_fa", "Gamma", "Alpha")
 
-        # --- SA sensitivity (T_init vs cooling_rate) ---
+        if "CS" in self.algorithm_names:
+            print("  -> CS Sensitivity...")
+            a_vals, pa_vals = [0.005, 0.01, 0.05], [0.1, 0.25, 0.4]
+            res = np.zeros((len(a_vals), len(pa_vals)))
+            for i, a in enumerate(a_vals):
+                for j, pa in enumerate(pa_vals):
+                    res[i,j] = np.mean([CuckooSearch(func, bounds, n_nests=30, pa=pa, alpha=a).optimize(iterations=30)[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, pa_vals, a_vals, f"CS Sensitivity on {prob_name}", f"{folder}/cont_sens_cs", "Pa", "Alpha")
+
         if "SA" in self.algorithm_names:
-            print("\n[SENSITIVITY] SA on Rastrigin (T_init vs cooling_rate)")
-            T_vals = [100, 1000, 5000]
-            cool_vals = [0.990, 0.995, 0.999]
-            sa_results = np.zeros((len(T_vals), len(cool_vals)))
-            for i, t_init in enumerate(T_vals):
-                for j, cr in enumerate(cool_vals):
-                    scores = []
-                    for _ in range(5):
-                        sa = SimulatedAnnealing(T_init=t_init, cooling_rate=cr,
-                                                max_iter=2500)
-                        _, s, _, _ = sa.optimize(func, bounds)
-                        scores.append(s)
-                    sa_results[i, j] = np.mean(scores)
-            visualization.plot_parameter_sensitivity(
-                sa_results, cool_vals, T_vals,
-                "SA Sensitivity on Rastrigin",
-                "continuous/sensitivity/cont_sensitivity_sa",
-                "Cooling Rate", "Initial Temperature (T₀)"
-            )
-            save_sensitivity_csv(sa_results, cool_vals, T_vals,
-                                 'sensitivity_sa.csv', 'cooling_rate', 'T_init',
-                                 subdir='continuous/sensitivity')
+            print("  -> SA Sensitivity...")
+            t_vals, c_vals = [100, 1000, 5000], [0.990, 0.995, 0.999]
+            res = np.zeros((len(t_vals), len(c_vals)))
+            for i, t in enumerate(t_vals):
+                for j, cr in enumerate(c_vals):
+                    res[i,j] = np.mean([SimulatedAnnealing(T_init=t, cooling_rate=cr, max_iter=1500).optimize(func, bounds)[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, c_vals, t_vals, f"SA Sensitivity on {prob_name}", f"{folder}/cont_sens_sa", "Cooling Rate", "T_init")
 
-        # --- TLBO sensitivity (pop_size — single param, heatmap 1×N) ---
         if "TLBO" in self.algorithm_names:
-            print("\n[SENSITIVITY] TLBO on Rastrigin (pop_size)")
+            print("  -> TLBO Sensitivity...")
             ps_vals = [10, 20, 50, 100]
-            tlbo_results = np.zeros((1, len(ps_vals)))
+            res = np.zeros((1, len(ps_vals)))
             for j, ps in enumerate(ps_vals):
-                scores = []
-                for _ in range(5):
-                    tlbo = TLBO(func, bounds, pop_size=ps)
-                    _, s, _, _ = tlbo.optimize(iterations=50)
-                    scores.append(s)
-                tlbo_results[0, j] = np.mean(scores)
-            visualization.plot_parameter_sensitivity(
-                tlbo_results, ps_vals, ["TLBO"],
-                "TLBO Sensitivity on Rastrigin (Pop Size)",
-                "continuous/sensitivity/cont_sensitivity_tlbo",
-                "Population Size", ""
-            )
-            save_sensitivity_csv(tlbo_results, ps_vals, ['TLBO'],
-                                 'sensitivity_tlbo.csv', 'pop_size', '',
-                                 subdir='continuous/sensitivity')
-
+                res[0,j] = np.mean([TLBO(func, bounds, pop_size=ps).optimize(iterations=30)[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, ps_vals, ["TLBO"], f"TLBO Sensitivity on {prob_name}", f"{folder}/cont_sens_tlbo", "Pop Size", "")
 
 # =============================================================================
 # GENERIC DISCRETE (TSP) COMPARISON ENGINE
@@ -1290,7 +1172,7 @@ def run_exploration_visualization(algorithm_names=None, problem_name="Rastrigin"
 if __name__ == "__main__":
     if not os.path.exists('results/figures'):
         os.makedirs('results/figures')
-
+    """
 # ================================================================
     # PART 1: DISCRETE EXPERIMENTS
     # ================================================================
@@ -1306,132 +1188,35 @@ if __name__ == "__main__":
 
     # --- Shortest Path ---
     ShortestPathComparison(num_nodes_list=[20, 50, 100]).run_all()
-
     """
     # ================================================================
-    # PART 2: CONTINUOUS EXPERIMENTS — Pairwise & Group Comparisons
+    # PART 2: CONTINUOUS EXPERIMENTS — GRAND COMPARISON
     # ================================================================
+    all_cont_algorithms = ["DE", "PSO", "ABC", "FA", "CS", "TLBO", "SA", "HC"]
+    all_cont_problems = ["Sphere", "Rastrigin", "Rosenbrock", "Griewank", "Ackley"]
 
-    # --- DE vs HC on Rastrigin (baseline comparison) ---
+    # Chạy đồng loạt mọi tiêu chí (Quality, Convergence, Scalability, Sensitivity) 
+    # cho 8 thuật toán trên 5 bài toán
     ContinuousComparison(
-        algorithm_names=["DE", "HC"],
-        problem_names=["Rastrigin"]
-    ).run_all()
-
-    # --- CS vs HC on Rastrigin ---
-    ContinuousComparison(
-        algorithm_names=["CS", "HC"],
-        problem_names=["Rastrigin"]
-    ).run_all()
-
-    # --- SA vs HC (Physics baseline) ---
-    ContinuousComparison(
-        algorithm_names=["SA", "HC"],
-        problem_names=["Sphere", "Rastrigin"]
-    ).run_all()
-
-    # --- DE vs TLBO ---
-    ContinuousComparison(
-        algorithm_names=["DE", "TLBO"],
-        problem_names=["Sphere", "Rastrigin"],
-        runs=30
-    ).run_all()
-
-    # --- CS vs TLBO ---
-    ContinuousComparison(
-        algorithm_names=["CS", "TLBO"],
-        problem_names=["Sphere", "Rastrigin"],
-        runs=30
-    ).run_all()
-
-    # --- DE vs PSO ---
-    ContinuousComparison(
-        algorithm_names=["DE", "PSO"],
-        problem_names=["Sphere", "Rastrigin"],
-        runs=30
-    ).run_all()
-
-    # --- DE vs ABC ---
-    ContinuousComparison(
-        algorithm_names=["DE", "ABC"],
-        problem_names=["Sphere", "Rastrigin"],
-        runs=30
-    ).run_all()
-
-    # --- PSO vs ABC vs CS (biology swarm showdown) ---
-    ContinuousComparison(
-        algorithm_names=["PSO", "ABC", "CS"],
-        problem_names=["Sphere", "Rastrigin"],
-        runs=30
-    ).run_all()
-
-    # --- SA vs population methods ---
-    ContinuousComparison(
-        algorithm_names=["SA", "DE", "PSO"],
-        problem_names=["Sphere", "Rastrigin"],
-        runs=30
-    ).run_all()
-
-    # --- FA pairwise ---
-    ContinuousComparison(
-        algorithm_names=["FA", "CS"],
-        problem_names=["Sphere", "Rastrigin"],
-        runs=30
-    ).run_all()
-
-    ContinuousComparison(
-        algorithm_names=["FA", "PSO"],
-        problem_names=["Sphere", "Rastrigin"],
-        runs=30
-    ).run_all()
-
-    # --- FA vs ABC vs CS (biology trio) ---
-    ContinuousComparison(
-        algorithm_names=["FA", "ABC", "CS"],
-        problem_names=["Sphere", "Rastrigin"],
-        runs=30
-    ).run_all()
-
-    # --- FA vs SA ---
-    ContinuousComparison(
-        algorithm_names=["FA", "SA"],
-        problem_names=["Sphere", "Rastrigin"],
+        algorithm_names=all_cont_algorithms,
+        problem_names=all_cont_problems,
         runs=30
     ).run_all()
 
     # ================================================================
-    # PART 3: GRAND COMPARISON — ALL algorithms × ALL 5 functions
+    # PART 3: 3D TRAJECTORY VISUALIZATIONS
     # ================================================================
-    ContinuousComparison(
-        algorithm_names=["DE", "CS", "HC", "TLBO", "PSO", "ABC", "FA", "SA"],
-        problem_names=["Sphere", "Rastrigin", "Rosenbrock", "Griewank", "Ackley"],
-        runs=30
-    ).run_all()
+    print("\n" + "="*60)
+    print("DRAWING 3D TRAJECTORIES FOR ALL PROBLEMS")
+    print("="*60)
+    
+    # Tự động vẽ 5 đồ thị 3D, mỗi đồ thị biểu diễn đường đi của cả 8 thuật toán
+    for prob in all_cont_problems:
+        run_exploration_visualization(
+            algorithm_names=all_cont_algorithms, 
+            problem_name=prob
+        )
 
-    # ================================================================
-    # PART 4: 3D TRAJECTORY VISUALIZATIONS
-    # ================================================================
-
-    # --- Rastrigin trajectories ---
-    run_exploration_visualization(algorithm_names=["DE", "HC"], problem_name="Rastrigin")
-    run_exploration_visualization(algorithm_names=["CS", "HC"], problem_name="Rastrigin")
-    run_exploration_visualization(algorithm_names=["DE", "TLBO"], problem_name="Rastrigin")
-    run_exploration_visualization(algorithm_names=["PSO", "HC"], problem_name="Rastrigin")
-    run_exploration_visualization(algorithm_names=["ABC", "HC"], problem_name="Rastrigin")
-    run_exploration_visualization(algorithm_names=["SA", "HC", "DE"], problem_name="Rastrigin")
-    run_exploration_visualization(algorithm_names=["DE", "PSO", "ABC"], problem_name="Rastrigin")
-    run_exploration_visualization(algorithm_names=["FA", "CS", "HC"], problem_name="Rastrigin")
-    run_exploration_visualization(algorithm_names=["FA", "PSO", "DE"], problem_name="Rastrigin")
-
-    # --- Ackley trajectories (visually interesting) ---
-    run_exploration_visualization(algorithm_names=["DE", "HC"], problem_name="Ackley")
-    run_exploration_visualization(algorithm_names=["PSO", "CS", "FA"], problem_name="Ackley")
-    run_exploration_visualization(algorithm_names=["SA", "TLBO"], problem_name="Ackley")
-
-    # --- Rosenbrock trajectories (narrow valley) ---
-    run_exploration_visualization(algorithm_names=["DE", "HC"], problem_name="Rosenbrock")
-    run_exploration_visualization(algorithm_names=["PSO", "TLBO"], problem_name="Rosenbrock")
-    """
     print("\n" + "="*60)
     print("HOÀN THÀNH. KIỂM TRA FOLDER RESULTS/FIGURES.")
     print("="*60)
