@@ -28,6 +28,36 @@ def rastrigin_function(x):
     d = len(x)
     return A * d + np.sum(x**2 - A * np.cos(2 * np.pi * x))
 
+def rosenbrock_function(x):
+    """Hàm Rosenbrock (Narrow Valley): Min tại [1,1,...,1] với giá trị 0
+    f(x) = Σ [100*(x_{i+1} - x_i²)² + (1 - x_i)²]
+    Bounds: [-5, 10]
+    """
+    x = np.array(x)
+    return np.sum(100.0 * (x[1:] - x[:-1]**2)**2 + (1 - x[:-1])**2)
+
+def griewank_function(x):
+    """Hàm Griewank (Regularly Distributed Minima): Min tại [0,0,...,0] với giá trị 0
+    f(x) = 1 + Σ(x_i²/4000) - Π cos(x_i/√i)
+    Bounds: [-600, 600]
+    """
+    x = np.array(x)
+    d = len(x)
+    sum_part = np.sum(x**2) / 4000.0
+    prod_part = np.prod(np.cos(x / np.sqrt(np.arange(1, d + 1))))
+    return 1.0 + sum_part - prod_part
+
+def ackley_function(x):
+    """Hàm Ackley (Many Local Optima): Min tại [0,0,...,0] với giá trị 0
+    f(x) = -20*exp(-0.2*√(Σx_i²/d)) - exp(Σcos(2πx_i)/d) + 20 + e
+    Bounds: [-32, 32]
+    """
+    x = np.array(x)
+    d = len(x)
+    sum_sq = np.sum(x**2)
+    sum_cos = np.sum(np.cos(2 * np.pi * x))
+    return -20.0 * np.exp(-0.2 * np.sqrt(sum_sq / d)) - np.exp(sum_cos / d) + 20.0 + np.e
+
 # --- 3. CHO BÀI TOÁN KP (Knapsack Problem) ---
 def generate_knapsack_problem(num_items, max_weight=50, max_value=100, capacity_ratio=0.5, seed=42):
     """
