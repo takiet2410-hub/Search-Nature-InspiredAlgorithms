@@ -1172,7 +1172,7 @@ def run_exploration_visualization(algorithm_names=None, problem_name="Rastrigin"
 if __name__ == "__main__":
     if not os.path.exists('results/figures'):
         os.makedirs('results/figures')
-    """
+        
 # ================================================================
     # PART 1: DISCRETE EXPERIMENTS
     # ================================================================
@@ -1188,7 +1188,7 @@ if __name__ == "__main__":
 
     # --- Shortest Path ---
     ShortestPathComparison(num_nodes_list=[20, 50, 100]).run_all()
-    """
+
     # ================================================================
     # PART 2: CONTINUOUS EXPERIMENTS — GRAND COMPARISON
     # ================================================================
