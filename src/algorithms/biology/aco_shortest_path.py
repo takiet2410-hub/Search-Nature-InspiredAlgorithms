@@ -56,7 +56,7 @@ class AntColonyOptimizationSP:
         best_path = None
         best_cost = float('inf')
         total_explored = 0
-        
+        history = [] 
         for _ in range(iterations):
             valid_paths = []
             valid_costs = []
@@ -70,7 +70,7 @@ class AntColonyOptimizationSP:
                     if cost < best_cost:
                         best_cost = cost
                         best_path = path
-                        
+                history.append(best_cost)
             # Cập nhật pheromone
             self.pheromone *= (1 - self.evaporation_rate)
             for path, cost in zip(valid_paths, valid_costs):
@@ -80,4 +80,4 @@ class AntColonyOptimizationSP:
                     self.pheromone[u][v] += deposit
                     self.pheromone[v][u] += deposit
                     
-        return best_path, best_cost, total_explored // (iterations * self.num_ants) # Trung bình explored
+        return best_path, best_cost, total_explored // (iterations * self.num_ants), history # Trung bình explored

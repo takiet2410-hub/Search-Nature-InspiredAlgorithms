@@ -71,7 +71,41 @@ class TSPGraphSearch:
                     new_g = g + self.dist_matrix[last][next_city]
                     heapq.heappush(pq, (new_g + h_rem, new_g, path + [next_city]))
         return best_cost
+    def hill_climbing(self, max_iter=5000):
+        """Hill Climbing (Local Search) cho TSP dùng 2-opt Swap"""
+        # Khởi tạo lộ trình ngẫu nhiên
+        curr_route = list(np.random.permutation(self.num_cities))
+        
+        def calc_cost(route):
+            cost = 0
+            for i in range(self.num_cities - 1):
+                cost += self.dist_matrix[route[i]][route[i+1]]
+            cost += self.dist_matrix[route[-1]][route[0]]
+            return cost
+            
+        curr_cost = calc_cost(curr_route)
+        best_route = curr_route.copy()
+        best_cost = curr_cost
+        history = [best_cost]
 
+        for _ in range(max_iter):
+            # Chọn 2 điểm cắt ngẫu nhiên (2-opt swap)
+            i, j = sorted(np.random.choice(self.num_cities, 2, replace=False))
+            neighbor_route = curr_route.copy()
+            neighbor_route[i:j+1] = reversed(neighbor_route[i:j+1])
+            
+            neighbor_cost = calc_cost(neighbor_route)
+            
+            if neighbor_cost <= curr_cost: # Greedy
+                curr_route = neighbor_route
+                curr_cost = neighbor_cost
+                if curr_cost < best_cost:
+                    best_cost = curr_cost
+                    best_route = curr_route.copy()
+                    
+            history.append(best_cost)
+            
+        return best_route, best_cost, history
 # ==========================================
 # PHẦN 2: SEARCH CHO CONTINUOUS (Hill Climbing)
 # ==========================================

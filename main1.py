@@ -36,6 +36,17 @@ from src.problems.discrete.shortest_path import (
     bfs_shortest, dfs_shortest,
 )
 
+# --- THÊM VÀO PHẦN IMPORT ---
+# Import ACO mới
+from src.algorithms.biology.aco_graph_coloring import AntColonyOptimizationGC
+from src.algorithms.biology.aco_shortest_path import AntColonyOptimizationSP
+
+# Import HC, DFS cho Graph Coloring
+from src.problems.discrete.graph_coloring import hc_graph_coloring, dfs_graph_coloring
+
+# Import HC, DFS cho Knapsack
+from src.algorithms.knapsack_solvers import hc_knapsack, dfs_knapsack
+
 # =============================================================================
 # HELPERS
 # =============================================================================
@@ -258,6 +269,15 @@ def run_ga_tsp(n, dist, generations, pop_size):
     route, cost, history = ga.solve(generations=generations)
     return cost, history, route
 
+@register_tsp("HC")
+def run_hc_tsp(n, dist, generations, pop_size):
+    solver = TSPGraphSearch(n, dist)
+    # Generations * pop_size để công bằng số lần đánh giá hàm mục tiêu
+    route, cost, history = solver.hill_climbing(max_iter=generations * pop_size)
+    step = max(1, len(history) // generations)
+    sampled_history = history[::step][:generations]
+    return cost, sampled_history, route
+
 @register_tsp("ACO")
 def run_aco_tsp(n, dist, generations, pop_size):
     aco = AntColonyOptimizationTSP(
@@ -356,24 +376,27 @@ class ContinuousComparison:
                 all_histories[name].append(history)
 
         tag = f"cont_{prob_name.lower()}_{'_vs_'.join(self.algorithm_names)}"
+        
+        # --- LƯU VÀO FOLDER TÊN HÀM ---
+        folder_path = f"continuous/{prob_name.lower()}"
 
         # Convergence plot
         visualization.plot_robustness_convergence(
             all_histories,
             f"Convergence on {prob_name}: {' vs '.join(self.algorithm_names)}",
-            f"continuous/convergence/{tag}_convergence"
+            f"{folder_path}/{tag}_convergence"
         )
 
         # Boxplot
         visualization.plot_boxplot_comparison(
             all_scores,
             f"Quality on {prob_name}: {' vs '.join(self.algorithm_names)}",
-            f"continuous/quality/{tag}_boxplot"
+            f"{folder_path}/{tag}_boxplot"
         )
 
         # --- CSV EXPORT ---
-        save_scores_csv(all_scores, f"{tag}_scores.csv", subdir='continuous')
-        save_convergence_csv(all_histories, f"{tag}_convergence.csv", subdir='continuous')
+        save_scores_csv(all_scores, f"{tag}_scores.csv", subdir=folder_path)
+        save_convergence_csv(all_histories, f"{tag}_convergence.csv", subdir=folder_path)
 
         # Stats
         names = self.algorithm_names
@@ -399,14 +422,15 @@ class ContinuousComparison:
                 times[name].append(time.time() - s)
 
         tag = '_vs_'.join(self.algorithm_names)
+        folder_path = "continuous/rastrigin" # Gom chung vào rastrigin
         visualization.plot_scalability_lines(
             dims, times,
             f"Scalability: {' vs '.join(self.algorithm_names)} on Rastrigin (Time)",
-            f"continuous/scalability/cont_scalability_time_{tag}",
+            f"{folder_path}/cont_scalability_time_{tag}",
             "Dimensions (D)", "Execution Time (s)"
         )
         save_scalability_csv(dims, times, f"cont_scalability_{tag}.csv",
-                             'Dimensions', subdir='continuous')
+                             'Dimensions', subdir=folder_path)
 
     # ------------------------------------------------------------------
     # SENSITIVITY ANALYSES — All Algorithms
@@ -635,15 +659,22 @@ class DiscreteComparison:
                 heuristic_times[name].append(np.mean(run_times))
 
         all_times = {**exact_times, **heuristic_times}
+        
+        # --- ĐỊNH NGHĨA FOLDER CHUNG CHO TSP ---
+        folder = "discrete/tsp" 
+        tag = '_'.join(self.algorithm_names)
+
+        # CHỈ GỌI MỘT LẦN VỚI ĐƯỜNG DẪN ĐÃ ĐƯỢC GOM NHÓM
         visualization.plot_scalability_lines(
             self.sizes, all_times,
             f"Discrete Scalability: {' vs '.join(all_times.keys())}",
-            f"discrete/scalability/tsp_scalability_{'_'.join(self.algorithm_names)}",
+            f"{folder}/tsp_scalability_{tag}", # Đã xóa 'scalability/' ở giữa
             "Number of Cities", "Execution Time (s)"
         )
-        tag = '_'.join(self.algorithm_names)
+        
+        # LƯU CSV VÀO CÙNG THƯ MỤC
         save_scalability_csv(self.sizes, all_times, f"tsp_scalability_{tag}.csv",
-                             'Cities', subdir='discrete')
+                             'Cities', subdir=folder)
 
     def _quality_vs_optimal(self):
         print("\n[2] QUALITY vs OPTIMAL")
@@ -672,22 +703,23 @@ class DiscreteComparison:
 
         scores_for_plot = {**all_scores, 'Exact (Fixed)': [optimal_cost] * self.runs}
 
+        folder = "discrete/tsp" # Gom vào folder tsp
         visualization.plot_robustness_convergence(
             all_histories,
             f"Discrete Convergence: {' vs '.join(self.algorithm_names)}",
-            f"discrete/convergence/tsp_convergence_{'_'.join(self.algorithm_names)}"
+            f"{folder}/tsp_convergence_{'_'.join(self.algorithm_names)}"
         )
         visualization.plot_boxplot_comparison(
             scores_for_plot,
             f"Discrete Quality: {' vs '.join(self.algorithm_names)} vs Exact",
-            f"discrete/quality/tsp_quality_{'_'.join(self.algorithm_names)}",
+            f"{folder}/tsp_quality_{'_'.join(self.algorithm_names)}",
             ylabel="Path Cost"
         )
 
         # --- CSV EXPORT ---
         tag = '_'.join(self.algorithm_names)
-        save_scores_csv(scores_for_plot, f"tsp_quality_{tag}.csv", subdir='discrete')
-        save_convergence_csv(all_histories, f"tsp_convergence_{tag}.csv", subdir='discrete')
+        save_scores_csv(scores_for_plot, f"tsp_quality_{tag}.csv", subdir=folder)
+        save_convergence_csv(all_histories, f"tsp_convergence_{tag}.csv", subdir=folder)
 
         for name in self.algorithm_names:
             mean = np.mean(all_scores[name])
@@ -697,39 +729,48 @@ class DiscreteComparison:
                 visualization.plot_tsp_route(
                     cities, best_routes[name],
                     f"{name} Best Route (Cost {best_costs[name]:.2f})",
-                    f"discrete/routes/tsp_best_route_{name.lower()}"
+                    f"{folder}/tsp_best_route_{name.lower()}"
                 )
 
     def _sensitivity(self):
-        print("\n[3] SENSITIVITY (GA)")
-        if "GA" not in self.algorithm_names:
-            return
-        mut_rates = [0.01, 0.1, 0.2, 0.5]
-        pop_sizes = [20, 50, 100]
-        results = np.zeros((len(mut_rates), len(pop_sizes)))
+        print("\n[3] SENSITIVITY ANALYSIS (TSP)")
         n = self.sizes[-1]
         cities = problems.generate_cities(n, seed=99)
         dist = problems.calculate_distance_matrix(cities)
+        folder = "discrete/tsp"
 
-        for i, mr in enumerate(mut_rates):
-            for j, ps in enumerate(pop_sizes):
-                costs = []
-                for _ in range(5):
-                    ga = GeneticAlgorithmTSP(n, dist, pop_size=ps, mutation_rate=mr)
-                    _, c, _ = ga.solve(generations=50)
-                    costs.append(c)
-                results[i, j] = np.mean(costs)
+        # --- 1. GA Sensitivity (Pop Size vs Mutation Rate) ---
+        if "GA" in self.algorithm_names:
+            print("  Running GA Sensitivity...")
+            mut_rates, pop_sizes = [0.01, 0.1, 0.5], [20, 50, 100]
+            results = np.zeros((len(mut_rates), len(pop_sizes)))
+            for i, mr in enumerate(mut_rates):
+                for j, ps in enumerate(pop_sizes):
+                    costs = [GeneticAlgorithmTSP(n, dist, pop_size=ps, mutation_rate=mr).solve(generations=50)[1] for _ in range(5)]
+                    results[i, j] = np.mean(costs)
+            visualization.plot_parameter_sensitivity(results, pop_sizes, mut_rates, "GA TSP Sensitivity", f"{folder}/tsp_sens_ga", "Pop Size", "Mut Rate")
 
-        tag = '_'.join(self.algorithm_names)
-        visualization.plot_parameter_sensitivity(
-            results, pop_sizes, mut_rates,
-            "GA Sensitivity Analysis",
-            f"discrete/sensitivity/tsp_sensitivity_{tag}",
-            "Population Size", "Mutation Rate"
-        )
-        save_sensitivity_csv(results, pop_sizes, mut_rates,
-                             f"tsp_sensitivity_{tag}.csv", 'pop_size', 'mutation_rate',
-                             subdir='discrete/sensitivity')
+        # --- 2. ACO Sensitivity (Alpha vs Beta) ---
+        if "ACO" in self.algorithm_names:
+            print("  Running ACO Sensitivity...")
+            alphas, betas = [0.5, 1.0, 2.0], [1.0, 3.0, 5.0]
+            results = np.zeros((len(alphas), len(betas)))
+            for i, a in enumerate(alphas):
+                for j, b in enumerate(betas):
+                    costs = [AntColonyOptimizationTSP(n, dist, alpha=a, beta=b).solve(iterations=50)[1] for _ in range(3)]
+                    results[i, j] = np.mean(costs)
+            visualization.plot_parameter_sensitivity(results, betas, alphas, "ACO TSP Sensitivity", f"{folder}/tsp_sens_aco", "Beta", "Alpha")
+
+        # --- 3. SA Sensitivity (T_init vs Cooling Rate) ---
+        if "SA" in self.algorithm_names:
+            print("  Running SA Sensitivity...")
+            temps, cools = [100, 1000, 5000], [0.95, 0.99, 0.999]
+            results = np.zeros((len(temps), len(cools)))
+            for i, t in enumerate(temps):
+                for j, c in enumerate(cools):
+                    costs = [SimulatedAnnealing(T_init=t, cooling_rate=c).solve_tsp(n, dist)[1] for _ in range(3)]
+                    results[i, j] = np.mean(costs)
+            visualization.plot_parameter_sensitivity(results, cools, temps, "SA TSP Sensitivity", f"{folder}/tsp_sens_sa", "Cooling Rate", "T_init")
 
 
 # =============================================================================
@@ -737,12 +778,9 @@ class DiscreteComparison:
 # =============================================================================
 class KnapsackComparison:
     """
-    So sánh TẤT CẢ thuật toán trên bài toán Knapsack vs DP optimal.
-    Algorithms: GA, SA, PSO, DE, ABC, CS, FA, TLBO
+    So sánh TẤT CẢ thuật toán trên bài toán Knapsack.
+    Algorithms: DFS, HC, GA, SA, PSO, DE, ABC, CS, FA, TLBO
     """
-
-    # Registry: name → runner(weights, values, capacity, pop_size, gens) → (ind, val, hist)
-    KP_ALGORITHMS = {}
 
     def __init__(self, num_items_list=None, runs=30, pop_size=50):
         self.num_items_list = num_items_list or [10, 15, 20, 30]
@@ -751,6 +789,8 @@ class KnapsackComparison:
 
         # Register all KP solvers
         self.KP_ALGORITHMS = {
+            'DFS':  lambda w, v, c, ps, g: dfs_knapsack(w, v, c), # DFS vét cạn (Optimal)
+            'HC':   lambda w, v, c, ps, g: hc_knapsack(w, v, c, max_iter=ps*g),
             'GA':   lambda w, v, c, ps, g: GeneticAlgorithmKnapsack(w, v, c, pop_size=ps).solve(generations=g),
             'SA':   lambda w, v, c, ps, g: sa_knapsack(w, v, c, max_iter=ps*g),
             'PSO':  lambda w, v, c, ps, g: pso_knapsack(w, v, c, num_particles=ps, iterations=g),
@@ -763,34 +803,17 @@ class KnapsackComparison:
 
     def run_all(self):
         print("\n" + "#"*60)
-        print("KNAPSACK PROBLEM — ALL ALGORITHMS vs DP Optimal")
+        print("KNAPSACK PROBLEM — ALL ALGORITHMS")
         print("#"*60)
 
         self._quality_comparison()
         self._scalability()
         self._sensitivity()
 
-    def _dp_knapsack(self, weights, values, capacity):
-        """Dynamic Programming Baseline (optimal cho 0/1 Knapsack)."""
-        n = len(weights)
-        dp = np.zeros((n + 1, capacity + 1))
-        for i in range(1, n + 1):
-            for w in range(capacity + 1):
-                if weights[i - 1] <= w:
-                    dp[i][w] = max(dp[i - 1][w],
-                                   dp[i - 1][w - weights[i - 1]] + values[i - 1])
-                else:
-                    dp[i][w] = dp[i - 1][w]
-        return int(dp[n][capacity])
-
     def _quality_comparison(self):
-        print("\n[1] QUALITY COMPARISON — All Algorithms vs DP Optimal")
+        print("\n[1] QUALITY COMPARISON — All Algorithms")
         n_items = 20
         weights, values, capacity = problems.generate_knapsack_problem(n_items, seed=42)
-
-        # DP Optimal
-        optimal = self._dp_knapsack(weights, values, capacity)
-        print(f"  DP Optimal Value: {optimal}")
 
         all_values = {}    # name → [val per run]
         all_histories = {} # name → [history per run]
@@ -799,13 +822,27 @@ class KnapsackComparison:
             print(f"  Running {alg_name}...", end=' ')
             vals = []
             hists = []
-            for _ in range(self.runs):
+            
+            # DFS là deterministic (chạy bao nhiêu lần cũng ra 1 kết quả), nên chỉ chạy 1 lần cho lẹ
+            run_count = 1 if alg_name == 'DFS' else self.runs
+            
+            for _ in range(run_count):
                 _, val, hist = runner(weights, values, capacity, self.pop_size, 100)
                 vals.append(val)
                 hists.append(hist)
+                
+            if alg_name == 'DFS':
+                # Nhân bản kết quả DFS ra cho đủ số lượng để vẽ boxplot không bị lỗi
+                vals = vals * self.runs
+                hists = hists * self.runs
+                
             all_values[alg_name] = vals
             all_histories[alg_name] = hists
             print(f"Mean={np.mean(vals):.2f}, Std={np.std(vals):.2f}")
+
+        # Lấy kết quả của DFS làm chuẩn (Optimal) để tính sai số (Gap)
+        optimal = np.max(all_values['DFS'])
+        print(f"  -> DFS Optimal Value (Baseline): {optimal}")
 
         # Convergence
         visualization.plot_robustness_convergence(
@@ -815,85 +852,122 @@ class KnapsackComparison:
         )
 
         # Boxplot
-        scores_for_plot = {**all_values, 'DP Optimal': [optimal] * self.runs}
         visualization.plot_boxplot_comparison(
-            scores_for_plot,
-            "Knapsack Quality — All Algorithms vs DP Optimal",
+            all_values,
+            "Knapsack Quality — All Algorithms",
             "discrete/knapsack/kp_quality_all_boxplot",
             ylabel="Total Value"
         )
 
         # CSV
-        save_scores_csv(scores_for_plot, 'kp_quality_all.csv', subdir='discrete/knapsack')
+        save_scores_csv(all_values, 'kp_quality_all.csv', subdir='discrete/knapsack')
         save_convergence_csv(all_histories, 'kp_convergence_all.csv', subdir='discrete/knapsack')
 
         # Stats
         for name in self.KP_ALGORITHMS:
             mean = np.mean(all_values[name])
-            gap = (optimal - mean) / optimal * 100
+            gap = (optimal - mean) / optimal * 100 if optimal > 0 else 0
             t = manual_onesample_ttest(all_values[name], optimal)
-            print(f"  [{name}] Mean={mean:.2f}, Gap={gap:.2f}%, t={t:.4f}")
+            print(f"  [{name}] Mean={mean:.2f}, Gap to DFS={gap:.2f}%, t={t:.4f}")
 
     def _scalability(self):
         print("\n[2] SCALABILITY (Time vs Num Items)")
-        times_ga = []
-        times_dp = []
+        times = {name: [] for name in self.KP_ALGORITHMS.keys()}
 
         for n_items in self.num_items_list:
             w, v, c = problems.generate_knapsack_problem(n_items, seed=42)
 
-            # GA
-            s = time.time()
-            for _ in range(5):
-                ga = GeneticAlgorithmKnapsack(w, v, c, pop_size=30)
-                ga.solve(generations=50)
-            times_ga.append((time.time() - s) / 5)
-
-            # DP
-            s = time.time()
-            for _ in range(5):
-                self._dp_knapsack(w, v, c)
-            times_dp.append((time.time() - s) / 5)
+            # Chạy toàn bộ Heuristics (Tất cả các thuật toán)
+            for name, runner in self.KP_ALGORITHMS.items():
+                s = time.time()
+                for _ in range(3): # Chạy 3 lần lấy trung bình cho lẹ
+                    runner(w, v, c, self.pop_size, 50)
+                times[name].append((time.time() - s) / 3)
 
         visualization.plot_scalability_lines(
-            self.num_items_list,
-            {'GA': times_ga, 'DP (Exact)': times_dp},
-            "Knapsack Scalability: GA vs DP",
-            "discrete/knapsack/kp_scalability",
+            self.num_items_list, times,
+            "Knapsack Scalability: All Algorithms",
+            "discrete/knapsack/kp_scalability_all",
             "Number of Items", "Execution Time (s)"
         )
-        save_scalability_csv(
-            self.num_items_list, {'GA': times_ga, 'DP': times_dp},
-            'kp_scalability.csv', 'Num_Items', subdir='discrete/knapsack'
-        )
+        save_scalability_csv(self.num_items_list, times, 'kp_scalability_all.csv', 'Num_Items', subdir='discrete/knapsack')
 
     def _sensitivity(self):
-        print("\n[3] SENSITIVITY (GA Knapsack)")
-        n_items = 20
-        w, v, c = problems.generate_knapsack_problem(n_items, seed=42)
+        print("\n[3] SENSITIVITY ANALYSIS (Knapsack) - FULL ALGORITHMS")
+        w, v, c = problems.generate_knapsack_problem(20, seed=42)
+        folder = "discrete/knapsack"
+        import src.algorithms.knapsack_solvers as ks
 
-        mut_rates = [0.01, 0.05, 0.1, 0.2]
-        pop_sizes = [20, 50, 100]
-        results = np.zeros((len(mut_rates), len(pop_sizes)))
+        if 'GA' in self.KP_ALGORITHMS:
+            print("  -> GA Sensitivity...")
+            mr_list, ps_list = [0.01, 0.1, 0.2], [20, 50, 100]
+            res = np.zeros((len(mr_list), len(ps_list)))
+            for i, mr in enumerate(mr_list):
+                for j, ps in enumerate(ps_list):
+                    res[i,j] = np.mean([GeneticAlgorithmKnapsack(w,v,c,pop_size=ps, mutation_rate=mr).solve(generations=30)[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, ps_list, mr_list, "GA KP Sensitivity", f"{folder}/kp_sens_ga", "Pop Size", "Mut Rate")
 
-        for i, mr in enumerate(mut_rates):
-            for j, ps in enumerate(pop_sizes):
-                vals = []
-                for _ in range(5):
-                    ga = GeneticAlgorithmKnapsack(w, v, c, pop_size=ps, mutation_rate=mr)
-                    _, val, _ = ga.solve(generations=50)
-                    vals.append(val)
-                results[i, j] = np.mean(vals)
+        if 'SA' in self.KP_ALGORITHMS:
+            print("  -> SA Sensitivity...")
+            t_list, c_list = [500, 1000, 5000], [0.9, 0.95, 0.99]
+            res = np.zeros((len(t_list), len(c_list)))
+            for i, t in enumerate(t_list):
+                for j, cl in enumerate(c_list):
+                    res[i,j] = np.mean([sa_knapsack(w,v,c, max_iter=1000, T_init=t, cooling_rate=cl)[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, c_list, t_list, "SA KP Sensitivity", f"{folder}/kp_sens_sa", "Cooling Rate", "T_init")
 
-        visualization.plot_parameter_sensitivity(
-            results, pop_sizes, mut_rates,
-            "GA Knapsack Sensitivity",
-            "discrete/knapsack/kp_sensitivity",
-            "Population Size", "Mutation Rate"
-        )
-        save_sensitivity_csv(results, pop_sizes, mut_rates,
-                             'kp_sensitivity.csv', 'pop_size', 'mutation_rate',
-                             subdir='discrete/knapsack')
+        if 'DE' in self.KP_ALGORITHMS:
+            print("  -> DE Sensitivity...")
+            f_list, cr_list = [0.3, 0.5, 0.9], [0.1, 0.5, 0.9]
+            res = np.zeros((len(f_list), len(cr_list)))
+            for i, f_val in enumerate(f_list):
+                for j, cr in enumerate(cr_list):
+                    res[i,j] = np.mean([ks._run_continuous_for_kp(DifferentialEvolution, w, v, c, {'pop_size':30, 'mutation_factor':f_val, 'crossover_rate':cr}, {'generations':30})[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, cr_list, f_list, "DE KP Sensitivity", f"{folder}/kp_sens_de", "Crossover Rate", "Mutation Factor")
+
+        if 'PSO' in self.KP_ALGORITHMS:
+            print("  -> PSO Sensitivity...")
+            w_list, c_list = [0.4, 0.7, 0.9], [1.0, 1.5, 2.0]
+            res = np.zeros((len(w_list), len(c_list)))
+            for i, w_val in enumerate(w_list):
+                for j, c_val in enumerate(c_list):
+                    res[i,j] = np.mean([ks._run_continuous_for_kp(ParticleSwarmOptimization, w, v, c, {'num_particles':30, 'w':w_val, 'c1':c_val, 'c2':c_val}, {'iterations':30})[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, c_list, w_list, "PSO KP Sensitivity", f"{folder}/kp_sens_pso", "C1=C2", "Inertia Weight")
+
+        if 'ABC' in self.KP_ALGORITHMS:
+            print("  -> ABC Sensitivity...")
+            lim_list, col_list = [50, 100, 200], [20, 40, 60]
+            res = np.zeros((len(lim_list), len(col_list)))
+            for i, lim in enumerate(lim_list):
+                for j, col in enumerate(col_list):
+                    res[i,j] = np.mean([ks._run_continuous_for_kp(ArtificialBeeColony, w, v, c, {'colony_size':col, 'limit':lim}, {'iterations':30})[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, col_list, lim_list, "ABC KP Sensitivity", f"{folder}/kp_sens_abc", "Colony Size", "Limit")
+
+        if 'FA' in self.KP_ALGORITHMS:
+            print("  -> FA Sensitivity...")
+            a_list, g_list = [0.1, 0.5, 1.0], [0.5, 1.0, 2.0]
+            res = np.zeros((len(a_list), len(g_list)))
+            for i, a_val in enumerate(a_list):
+                for j, g_val in enumerate(g_list):
+                    res[i,j] = np.mean([ks._run_continuous_for_kp(FireflyAlgorithm, w, v, c, {'n_fireflies':30, 'alpha':a_val, 'gamma':g_val}, {'iterations':30})[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, g_list, a_list, "FA KP Sensitivity", f"{folder}/kp_sens_fa", "Gamma", "Alpha")
+
+        if 'CS' in self.KP_ALGORITHMS:
+            print("  -> CS Sensitivity...")
+            a_list, pa_list = [0.005, 0.01, 0.05], [0.1, 0.25, 0.4]
+            res = np.zeros((len(a_list), len(pa_list)))
+            for i, a_val in enumerate(a_list):
+                for j, pa_val in enumerate(pa_list):
+                    res[i,j] = np.mean([ks._run_continuous_for_kp(CuckooSearch, w, v, c, {'n_nests':30, 'alpha':a_val, 'pa':pa_val}, {'iterations':30})[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, pa_list, a_list, "CS KP Sensitivity", f"{folder}/kp_sens_cs", "Pa", "Alpha")
+
+        if 'TLBO' in self.KP_ALGORITHMS:
+            print("  -> TLBO Sensitivity...")
+            ps_list = [10, 20, 50, 100]
+            res = np.zeros((1, len(ps_list)))
+            for j, ps in enumerate(ps_list):
+                res[0,j] = np.mean([ks._run_continuous_for_kp(TLBO, w, v, c, {'pop_size':ps}, {'iterations':30})[1] for _ in range(3)])
+            visualization.plot_parameter_sensitivity(res, ps_list, ["TLBO"], "TLBO KP Sensitivity", f"{folder}/kp_sens_tlbo", "Pop Size", "")
 
 
 # =============================================================================
@@ -901,7 +975,7 @@ class KnapsackComparison:
 # =============================================================================
 class GraphColoringComparison:
     """
-    So sánh GA + SA Graph Coloring với Greedy Baseline.
+    So sánh các thuật toán GA, SA, ACO, HC, DFS trên bài toán Graph Coloring.
     """
 
     def __init__(self, num_nodes_list=None, edge_prob=0.5, runs=30):
@@ -911,116 +985,113 @@ class GraphColoringComparison:
 
     def run_all(self):
         print("\n" + "#"*60)
-        print("GRAPH COLORING — GA vs SA vs Greedy")
+        print("GRAPH COLORING — FULL ALGORITHMS")
         print("#"*60)
-
         self._quality_comparison()
         self._scalability()
+        self._sensitivity()
 
     def _quality_comparison(self):
-        print("\n[1] QUALITY COMPARISON")
+        print("\n[1] QUALITY COMPARISON - GC (GA, SA, ACO, HC, DFS)")
         n = 20
         adj, edges = generate_random_graph(n, self.edge_prob, seed=42)
 
-        # Greedy baseline
-        greedy_coloring, greedy_num_colors = greedy_graph_coloring(adj)
-        greedy_conflicts = count_conflicts(greedy_coloring, adj)
-        print(f"  Greedy: {greedy_num_colors} colors, {greedy_conflicts} conflicts")
+        # Greedy baseline chỉ dùng để lấy số màu làm chuẩn (không đưa vào so sánh)
+        _, num_colors = greedy_graph_coloring(adj)
+        print(f"  Graph has {n} nodes. Using {num_colors} colors as target.")
 
-        num_colors = greedy_num_colors
+        all_conflicts = {'GA': [], 'SA': [], 'ACO': [], 'HC': [], 'DFS': []}
+        all_histories = {'GA': [], 'SA': [], 'ACO': [], 'HC': [], 'DFS': []}
 
-        # --- GA Runs ---
-        ga_conflicts = []
-        ga_histories = []
         for _ in range(self.runs):
-            coloring, conf, hist = ga_graph_coloring(
-                adj, num_colors=num_colors, pop_size=50, generations=100)
-            ga_conflicts.append(conf)
-            ga_histories.append(hist)
+            # 1. GA
+            _, c, h = ga_graph_coloring(adj, num_colors=num_colors, pop_size=30, generations=100)
+            all_conflicts['GA'].append(c); all_histories['GA'].append(h)
+            
+            # 2. SA
+            _, c, h = sa_graph_coloring(adj, num_colors=num_colors, max_iter=3000)
+            all_conflicts['SA'].append(c); all_histories['SA'].append(h)
+            
+            # 3. ACO
+            aco = AntColonyOptimizationGC(adj, num_colors, num_ants=30)
+            _, c, h = aco.solve(iterations=100)
+            all_conflicts['ACO'].append(c); all_histories['ACO'].append(h)
+            
+            # 4. HC
+            _, c, h = hc_graph_coloring(adj, num_colors=num_colors, max_iter=3000)
+            all_conflicts['HC'].append(c); all_histories['HC'].append(h)
+            
+            # 5. DFS
+            _, c, h = dfs_graph_coloring(adj, num_colors=num_colors)
+            all_conflicts['DFS'].append(c); all_histories['DFS'].append(h)
 
-        # --- SA Runs ---
-        sa_conflicts = []
-        sa_histories = []
-        for _ in range(self.runs):
-            coloring, conf, hist = sa_graph_coloring(
-                adj, num_colors=num_colors, max_iter=5000)
-            sa_conflicts.append(conf)
-            sa_histories.append(hist)
+        # Plot & CSV
+        folder = "discrete/graph_coloring"
+        visualization.plot_robustness_convergence(all_histories, f"GC Convergence", f"{folder}/gc_convergence")
+        visualization.plot_boxplot_comparison(all_conflicts, f"GC Conflicts Comparison", f"{folder}/gc_boxplot", ylabel="Conflicts")
+        save_scores_csv(all_conflicts, 'gc_quality.csv', subdir=folder)
+        save_convergence_csv(all_histories, 'gc_convergence.csv', subdir=folder)
 
-        all_histories = {
-            'GA': ga_histories,
-            'SA': sa_histories,
-        }
-
-        # Convergence
-        visualization.plot_robustness_convergence(
-            all_histories,
-            f"Graph Coloring Convergence ({num_colors} colors, {n} nodes)",
-            "discrete/graph_coloring/gc_convergence_all"
-        )
-
-        # Boxplot
-        scores_for_plot = {
-            'GA': [float(c) for c in ga_conflicts],
-            'SA': [float(c) for c in sa_conflicts],
-            'Greedy': [float(greedy_conflicts)] * self.runs,
-        }
-        visualization.plot_boxplot_comparison(
-            scores_for_plot,
-            "Graph Coloring: GA vs SA vs Greedy (Conflicts)",
-            "discrete/graph_coloring/gc_quality_all_boxplot",
-            ylabel="Number of Conflicts"
-        )
-
-        # CSV
-        save_scores_csv(scores_for_plot, 'gc_quality_all.csv', subdir='discrete/graph_coloring')
-        save_convergence_csv(all_histories, 'gc_convergence_all.csv', subdir='discrete/graph_coloring')
-
-        # Stats
-        print(f"  GA  Mean Conflicts: {np.mean(ga_conflicts):.2f}")
-        print(f"  SA  Mean Conflicts: {np.mean(sa_conflicts):.2f}")
-        print(f"  Greedy Conflicts: {greedy_conflicts}")
-        t = manual_twosample_ttest(
-            [float(c) for c in ga_conflicts],
-            [float(c) for c in sa_conflicts]
-        )
-        print(f"  T-test (GA vs SA): t={t:.4f}")
+        for alg in all_conflicts.keys():
+            print(f"  [{alg}] Mean Conflicts: {np.mean(all_conflicts[alg]):.2f}")
 
     def _scalability(self):
         print("\n[2] SCALABILITY")
-        times_ga = []
-        times_sa = []
-        times_greedy = []
+        # ĐÃ XÓA GREEDY KHỎI DICTIONARY NÀY
+        times = {'GA': [], 'SA': [], 'ACO': [], 'HC': [], 'DFS': []}
 
         for n in self.num_nodes_list:
             adj, _ = generate_random_graph(n, self.edge_prob, seed=42)
+            
+            # Chỉ chạy Greedy ngầm 1 lần để mượn số màu (nc) làm target
+            _, nc = greedy_graph_coloring(adj)
 
-            # Greedy
-            s = time.time()
-            for _ in range(5):
-                greedy_graph_coloring(adj)
-            times_greedy.append((time.time() - s) / 5)
+            s = time.time(); [ga_graph_coloring(adj, num_colors=nc, pop_size=30, generations=50) for _ in range(3)]; times['GA'].append((time.time()-s)/3)
+            s = time.time(); [sa_graph_coloring(adj, num_colors=nc, max_iter=1500) for _ in range(3)]; times['SA'].append((time.time()-s)/3)
+            s = time.time(); [AntColonyOptimizationGC(adj, nc, num_ants=20).solve(iterations=50) for _ in range(3)]; times['ACO'].append((time.time()-s)/3)
+            s = time.time(); [hc_graph_coloring(adj, num_colors=nc, max_iter=1500) for _ in range(3)]; times['HC'].append((time.time()-s)/3)
+            
+            # DFS chạy vét cạn nên rất lâu, chỉ đo 1 lần cho biểu đồ
+            s = time.time(); dfs_graph_coloring(adj, num_colors=nc); times['DFS'].append(time.time()-s)
 
-            # GA
-            greedy_col, nc = greedy_graph_coloring(adj)
-            s = time.time()
-            for _ in range(5):
-                ga_graph_coloring(adj, num_colors=nc, pop_size=30, generations=50)
-            times_ga.append((time.time() - s) / 5)
-
-            # SA
-            s = time.time()
-            for _ in range(5):
-                sa_graph_coloring(adj, num_colors=nc, max_iter=2500)
-            times_sa.append((time.time() - s) / 5)
-
-        all_times = {'GA': times_ga, 'SA': times_sa, 'Greedy': times_greedy}
         visualization.plot_scalability_lines(
-            self.num_nodes_list, all_times,
-            "Graph Coloring Scalability: GA vs SA vs Greedy",
+            self.num_nodes_list, times,
+            "Graph Coloring Scalability: All Solvers",
             "discrete/graph_coloring/gc_scalability_all",
             "Number of Nodes", "Execution Time (s)"
         )
+        save_scalability_csv(self.num_nodes_list, times, 'gc_scalability.csv', 'Nodes', subdir='discrete/graph_coloring')
+
+    def _sensitivity(self):
+        print("\n[3] SENSITIVITY ANALYSIS (Graph Coloring)")
+        n = 20
+        adj, _ = generate_random_graph(n, self.edge_prob, seed=42)
+        _, nc = greedy_graph_coloring(adj)
+        folder = "discrete/graph_coloring"
+
+        print("  -> GA Sensitivity...")
+        mr_list, ps_list = [0.01, 0.1, 0.3], [20, 50, 100]
+        res = np.zeros((len(mr_list), len(ps_list)))
+        for i, mr in enumerate(mr_list):
+            for j, ps in enumerate(ps_list):
+                res[i,j] = np.mean([ga_graph_coloring(adj, nc, pop_size=ps, generations=30, mutation_rate=mr)[1] for _ in range(3)])
+        visualization.plot_parameter_sensitivity(res, ps_list, mr_list, "GA GC Sensitivity", f"{folder}/gc_sens_ga", "Pop Size", "Mut Rate")
+
+        print("  -> SA Sensitivity...")
+        t_list, c_list = [10, 100, 500], [0.9, 0.95, 0.99]
+        res = np.zeros((len(t_list), len(c_list)))
+        for i, t in enumerate(t_list):
+            for j, c in enumerate(c_list):
+                res[i,j] = np.mean([sa_graph_coloring(adj, nc, max_iter=1000, T_init=t, cooling_rate=c)[1] for _ in range(3)])
+        visualization.plot_parameter_sensitivity(res, c_list, t_list, "SA GC Sensitivity", f"{folder}/gc_sens_sa", "Cooling Rate", "T_init")
+
+        print("  -> ACO Sensitivity...")
+        a_list, b_list = [0.5, 1.0, 2.0], [1.0, 2.0, 5.0]
+        res = np.zeros((len(a_list), len(b_list)))
+        for i, a in enumerate(a_list):
+            for j, b in enumerate(b_list):
+                res[i,j] = np.mean([AntColonyOptimizationGC(adj, nc, num_ants=20, alpha=a, beta=b).solve(30)[1] for _ in range(3)])
+        visualization.plot_parameter_sensitivity(res, b_list, a_list, "ACO GC Sensitivity", f"{folder}/gc_sens_aco", "Beta", "Alpha")
 
 
 # =============================================================================
@@ -1028,8 +1099,8 @@ class GraphColoringComparison:
 # =============================================================================
 class ShortestPathComparison:
     """
-    So sánh BFS, DFS, Dijkstra, A* trên bài toán Shortest Path.
-    Dijkstra = optimal baseline. A* = heuristic-guided. BFS = fewest edges. DFS = any path.
+    So sánh A*, BFS, DFS và ACO trên bài toán Shortest Path.
+    A* = heuristic-guided. BFS = fewest edges. DFS = any path. ACO = meta-heuristic.
     """
 
     def __init__(self, num_nodes_list=None, edge_prob=0.4, runs=30):
@@ -1039,112 +1110,117 @@ class ShortestPathComparison:
 
     def run_all(self):
         print("\n" + "#"*60)
-        print("SHORTEST PATH — Dijkstra vs A* vs BFS vs DFS")
+        print("SHORTEST PATH — FULL ALGORITHMS")
         print("#"*60)
-
         self._quality_comparison()
         self._scalability()
+        self._sensitivity()
 
     def _quality_comparison(self):
-        print("\n[1] QUALITY COMPARISON")
+        print("\n[1] QUALITY COMPARISON & CONVERGENCE")
         n = 50
-        adj, positions = generate_weighted_graph(n, self.edge_prob, seed=42)
-        start, goal = 0, n - 1
+        folder = "discrete/shortest_path"
 
-        # Dijkstra (optimal)
-        dij_path, dij_cost, dij_exp = dijkstra(adj, start, goal)
-        print(f"  Dijkstra (Optimal): cost={dij_cost:.2f}, explored={dij_exp}, path_len={len(dij_path)}")
-
-        # A*
-        astar_path, astar_cost, astar_exp = a_star_shortest(adj, positions, start, goal)
-        print(f"  A*:                 cost={astar_cost:.2f}, explored={astar_exp}, path_len={len(astar_path)}")
-
-        # Chạy nhiều lần với seed khác nhau để có thống kê
-        all_costs = {'Dijkstra': [], 'A*': [], 'BFS': [], 'DFS': []}
-        all_explored = {'Dijkstra': [], 'A*': [], 'BFS': [], 'DFS': []}
+        # ==========================================
+        # PHẦN A: BOXPLOT (Test trên 30 đồ thị khác nhau)
+        # ==========================================
+        all_costs = {'A*': [], 'BFS': [], 'DFS': [], 'ACO': []}
+        all_explored = {'A*': [], 'BFS': [], 'DFS': [], 'ACO': []}
 
         for run in range(self.runs):
             adj_r, pos_r = generate_weighted_graph(n, self.edge_prob, seed=run*7+1)
             s, g = 0, n - 1
 
-            _, c, e = dijkstra(adj_r, s, g)
-            all_costs['Dijkstra'].append(c)
-            all_explored['Dijkstra'].append(e)
-
             _, c, e = a_star_shortest(adj_r, pos_r, s, g)
-            all_costs['A*'].append(c)
-            all_explored['A*'].append(e)
+            all_costs['A*'].append(c); all_explored['A*'].append(e)
 
             _, c, e = bfs_shortest(adj_r, s, g)
-            all_costs['BFS'].append(c)
-            all_explored['BFS'].append(e)
+            all_costs['BFS'].append(c); all_explored['BFS'].append(e)
 
             _, c, e = dfs_shortest(adj_r, s, g)
-            all_costs['DFS'].append(c)
-            all_explored['DFS'].append(e)
+            all_costs['DFS'].append(c); all_explored['DFS'].append(e)
 
-        # Boxplot — Path Cost
-        visualization.plot_boxplot_comparison(
-            all_costs,
-            f"Shortest Path Quality (N={n}): Path Cost",
-            "discrete/shortest_path/sp_quality_cost",
-            ylabel="Path Cost"
-        )
+            # Lấy vị trí [1] là cost, [2] là explored
+            aco = AntColonyOptimizationSP(adj_r, s, g, num_ants=20)
+            res = aco.solve(iterations=50)
+            all_costs['ACO'].append(res[1])
+            all_explored['ACO'].append(res[2])
 
-        # Boxplot — Explored Nodes
-        visualization.plot_boxplot_comparison(
-            {k: [float(v) for v in vals] for k, vals in all_explored.items()},
-            f"Shortest Path Efficiency (N={n}): Nodes Explored",
-            "discrete/shortest_path/sp_quality_explored",
-            ylabel="Nodes Explored"
-        )
+        visualization.plot_boxplot_comparison(all_costs, f"SP Path Cost", f"{folder}/sp_cost_boxplot", ylabel="Cost")
+        visualization.plot_boxplot_comparison({k: [float(v) for v in vals] for k, vals in all_explored.items()}, f"SP Nodes Explored", f"{folder}/sp_explored_boxplot", ylabel="Nodes")
+        save_scores_csv(all_costs, 'sp_cost.csv', subdir=folder)
 
-        # CSV
-        save_scores_csv(all_costs, 'sp_quality_cost.csv', subdir='discrete/shortest_path')
-        save_scores_csv(
-            {k: [float(v) for v in vals] for k, vals in all_explored.items()},
-            'sp_quality_explored.csv', subdir='discrete/shortest_path'
-        )
+        # ==========================================
+        # PHẦN B: CONVERGENCE (Test nhiều lần trên 1 đồ thị duy nhất)
+        # ==========================================
+        adj_fixed, pos_fixed = generate_weighted_graph(n, self.edge_prob, seed=999)
+        s_f, g_f = 0, n - 1
 
-        # Stats
-        for name in all_costs:
-            mean_c = np.mean(all_costs[name])
-            mean_e = np.mean(all_explored[name])
-            print(f"  [{name}] Mean Cost={mean_c:.2f}, Mean Explored={mean_e:.1f}")
+        # Lấy cost cố định của các baselines
+        _, c_astar, _ = a_star_shortest(adj_fixed, pos_fixed, s_f, g_f)
+        _, c_bfs, _ = bfs_shortest(adj_fixed, s_f, g_f)
+        _, c_dfs, _ = dfs_shortest(adj_fixed, s_f, g_f)
 
-        # T-tests vs Dijkstra (optimal)
-        for name in ['A*', 'BFS', 'DFS']:
-            t = manual_twosample_ttest(all_costs['Dijkstra'], all_costs[name])
-            print(f"  T-test cost (Dijkstra vs {name}): t={t:.4f}")
+        # Thêm biến lưu số vòng lặp của ACO
+        aco_iters = 1000 # Hoặc 50, 100 tùy bạn thiết lập ở aco.solve()
+
+        # Baselines vẽ đường thẳng dài bằng với số vòng lặp của ACO
+        all_histories = {
+            'A*': [[c_astar] * aco_iters] * 5,
+            'BFS': [[c_bfs] * aco_iters] * 5,
+            'DFS': [[c_dfs] * aco_iters] * 5,
+            'ACO': []
+        }
+
+        # Chạy ACO 5 lần để lấy lịch sử tiến hóa
+        for _ in range(5):
+            aco = AntColonyOptimizationSP(adj_fixed, s_f, g_f, num_ants=20)
+            res = aco.solve(iterations=aco_iters) # Dùng biến ở đây
+            h = res[3] if len(res) > 3 else [res[1]] * aco_iters 
+            all_histories['ACO'].append(h)
+
+        visualization.plot_robustness_convergence(all_histories, "Shortest Path Convergence: ACO vs Baselines", f"{folder}/sp_convergence_all")
+        save_convergence_csv(all_histories, 'sp_convergence_all.csv', subdir=folder)
 
     def _scalability(self):
         print("\n[2] SCALABILITY")
-        times = {'Dijkstra': [], 'A*': [], 'BFS': [], 'DFS': []}
+        # Đã xóa Dijkstra
+        times = {'A*': [], 'BFS': [], 'DFS': [], 'ACO': []}
 
         for n in self.num_nodes_list:
             adj, pos = generate_weighted_graph(n, self.edge_prob, seed=42)
             s, g = 0, n - 1
 
-            for name, fn in [('Dijkstra', lambda: dijkstra(adj, s, g)),
-                             ('A*', lambda: a_star_shortest(adj, pos, s, g)),
+            for name, fn in [('A*', lambda: a_star_shortest(adj, pos, s, g)),
                              ('BFS', lambda: bfs_shortest(adj, s, g)),
-                             ('DFS', lambda: dfs_shortest(adj, s, g))]:
+                             ('DFS', lambda: dfs_shortest(adj, s, g)),
+                             ('ACO', lambda: AntColonyOptimizationSP(adj, s, g, num_ants=20).solve(20))]:
                 t0 = time.time()
-                for _ in range(10):
-                    fn()
-                times[name].append((time.time() - t0) / 10)
+                for _ in range(3): fn()
+                times[name].append((time.time() - t0) / 3)
 
         visualization.plot_scalability_lines(
             self.num_nodes_list, times,
-            "Shortest Path Scalability: Time vs Graph Size",
-            "discrete/shortest_path/sp_scalability",
+            "Shortest Path Scalability (All Solvers)",
+            "discrete/shortest_path/sp_scalability_all",
             "Number of Nodes", "Execution Time (s)"
         )
-        save_scalability_csv(
-            self.num_nodes_list, times,
-            'sp_scalability.csv', 'Nodes', subdir='discrete/shortest_path'
-        )
+        save_scalability_csv(self.num_nodes_list, times, 'sp_scalability_all.csv', 'Nodes', subdir='discrete/shortest_path')
 
+    def _sensitivity(self):
+        print("\n[3] SENSITIVITY ANALYSIS (Shortest Path)")
+        adj, _ = generate_weighted_graph(30, self.edge_prob, seed=42)
+        s, g = 0, 29
+        folder = "discrete/shortest_path"
+
+        print("  -> ACO Sensitivity...")
+        a_list, b_list = [0.5, 1.0, 2.0], [1.0, 3.0, 5.0]
+        res = np.zeros((len(a_list), len(b_list)))
+        for i, a in enumerate(a_list):
+            for j, b in enumerate(b_list):
+                # Lưu cost của đường đi
+                res[i,j] = np.mean([AntColonyOptimizationSP(adj, s, g, num_ants=20, alpha=a, beta=b).solve(20)[1] for _ in range(3)])
+        visualization.plot_parameter_sensitivity(res, b_list, a_list, "ACO SP Sensitivity (Cost)", f"{folder}/sp_sens_aco", "Beta", "Alpha")
 
 # EXPLORATION / 3D VISUALIZATION (standalone utility)
 # =============================================================================
@@ -1200,10 +1276,11 @@ def run_exploration_visualization(algorithm_names=None, problem_name="Rastrigin"
             paths["FA (Firefly)"] = path
 
     tag = '_vs_'.join(algorithm_names)
+    folder_path = f"continuous/{problem_name.lower()}" # Lưu vào folder tên hàm
     visualization.plot_3d_landscape_path(
         func, bounds_2d, paths,
         f"Trajectory on {problem_name}: {' vs '.join(algorithm_names)}",
-        f"continuous/3d/cont_3d_{tag}_{problem_name.lower()}"
+        f"{folder_path}/cont_3d_{tag}"
     )
 
 
@@ -1214,24 +1291,23 @@ if __name__ == "__main__":
     if not os.path.exists('results/figures'):
         os.makedirs('results/figures')
 
-    # ================================================================
+# ================================================================
     # PART 1: DISCRETE EXPERIMENTS
     # ================================================================
 
-    # --- TSP: GA only vs Exact Methods ---
-    DiscreteComparison(algorithm_names=["GA"], sizes=[8, 9, 10]).run_all()
-    # --- TSP: GA vs ACO vs SA ---
-    DiscreteComparison(algorithm_names=["GA", "ACO", "SA"], sizes=[8, 9, 10]).run_all()
+    # --- TSP ---
+    DiscreteComparison(algorithm_names=["GA", "ACO", "SA", "HC"], sizes=[8, 9, 10]).run_all()
 
     # --- Knapsack Problem ---
     KnapsackComparison(num_items_list=[10, 15, 20, 30]).run_all()
 
     # --- Graph Coloring ---
-    GraphColoringComparison(num_nodes_list=[10, 15, 20, 30]).run_all()
+    GraphColoringComparison(num_nodes_list=[10, 15, 20]).run_all()
 
     # --- Shortest Path ---
-    ShortestPathComparison(num_nodes_list=[20, 50, 100, 200]).run_all()
+    ShortestPathComparison(num_nodes_list=[20, 50, 100]).run_all()
 
+    """
     # ================================================================
     # PART 2: CONTINUOUS EXPERIMENTS — Pairwise & Group Comparisons
     # ================================================================
@@ -1355,7 +1431,7 @@ if __name__ == "__main__":
     # --- Rosenbrock trajectories (narrow valley) ---
     run_exploration_visualization(algorithm_names=["DE", "HC"], problem_name="Rosenbrock")
     run_exploration_visualization(algorithm_names=["PSO", "TLBO"], problem_name="Rosenbrock")
-
+    """
     print("\n" + "="*60)
     print("HOÀN THÀNH. KIỂM TRA FOLDER RESULTS/FIGURES.")
     print("="*60)

@@ -249,3 +249,83 @@ def tlbo_knapsack(weights, values, capacity, pop_size=30, iterations=100):
         alg_kwargs={'pop_size': pop_size},
         run_kwargs={'iterations': iterations}
     )
+
+
+# ============================================================
+# HC & DFS cho Knapsack (Baseline Traditional)
+# ============================================================
+
+def hc_knapsack(weights, values, capacity, max_iter=5000):
+    """
+    Hill Climbing cho Knapsack: Khởi tạo ngẫu nhiên, sau đó thử lật 1 bit.
+    Chỉ chấp nhận nếu giá trị tốt hơn (Greedy).
+    """
+    n = len(weights)
+    current = np.random.randint(0, 2, size=n)
+    current = _repair(current, weights, values, capacity)
+    curr_val = float(np.dot(current, values))
+    
+    best = current.copy()
+    best_val = curr_val
+    history = [best_val]
+
+    for _ in range(max_iter):
+        neighbor = current.copy()
+        idx = np.random.randint(0, n)
+        neighbor[idx] = 1 - neighbor[idx]  # Lật bit
+        neighbor = _repair(neighbor, weights, values, capacity)
+        neighbor_val = float(np.dot(neighbor, values))
+
+        if neighbor_val >= curr_val:  # Chỉ leo lên (tốt hơn hoặc bằng)
+            current = neighbor
+            curr_val = neighbor_val
+            
+            if curr_val > best_val:
+                best_val = curr_val
+                best = current.copy()
+                
+        history.append(best_val)
+
+    return best, best_val, history
+
+
+def dfs_knapsack(weights, values, capacity, max_iter=None):
+    """
+    DFS (Backtracking / Branch & Bound) cho Knapsack.
+    Duyệt cây không gian trạng thái (Chọn / Không chọn) để tìm Optimal.
+    """
+    n = len(weights)
+    best_val = [0]
+    best_ind = [np.zeros(n, dtype=int)]
+    
+    # Tính mảng hậu tố để cắt tỉa nhánh (Branch & Bound)
+    max_rem_values = np.zeros(n + 1)
+    for i in range(n - 1, -1, -1):
+        max_rem_values[i] = max_rem_values[i+1] + values[i]
+
+    def backtrack(idx, current_weight, current_val, current_ind):
+        # Cắt tỉa nhánh: Nếu giá trị hiện tại + tất cả phần còn lại vẫn thua best_val -> Bỏ qua
+        if current_val + max_rem_values[idx] <= best_val[0]:
+            return
+            
+        if idx == n:
+            if current_val > best_val[0]:
+                best_val[0] = current_val
+                best_ind[0] = current_ind.copy()
+            return
+
+        # Nhánh 1: CHỌN vật phẩm idx (nếu bỏ vừa túi)
+        if current_weight + weights[idx] <= capacity:
+            current_ind[idx] = 1
+            backtrack(idx + 1, current_weight + weights[idx], current_val + values[idx], current_ind)
+        
+        # Nhánh 2: KHÔNG CHỌN vật phẩm idx
+        current_ind[idx] = 0
+        backtrack(idx + 1, current_weight, current_val, current_ind)
+
+    # Chạy đệ quy
+    backtrack(0, 0, 0, np.zeros(n, dtype=int))
+    
+    # Tạo history ảo (đường thẳng) để không bị lỗi khi vẽ biểu đồ cùng GA/PSO
+    history = [best_val[0]] * 50 
+    return best_ind[0], best_val[0], history

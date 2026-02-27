@@ -223,3 +223,91 @@ def sa_graph_coloring(adj_matrix, num_colors=3, max_iter=5000,
             T = T_min
 
     return best, best_conf, history
+
+
+# ============================================================
+# HC & DFS cho Graph Coloring (Baseline Traditional)
+# ============================================================
+
+def hc_graph_coloring(adj_matrix, num_colors=3, max_iter=5000):
+    """
+    Hill Climbing cho Graph Coloring: 
+    Đổi màu 1 đỉnh ngẫu nhiên, chỉ giữ lại nếu làm giảm xung đột (Greedy).
+    """
+    n = len(adj_matrix)
+    current = np.random.randint(0, num_colors, size=n)
+    curr_conf = count_conflicts(current, adj_matrix)
+    
+    best = current.copy()
+    best_conf = curr_conf
+    history = [best_conf]
+    
+    for _ in range(max_iter):
+        if best_conf == 0:  # Đã tối ưu tuyệt đối
+            history.append(best_conf)
+            continue
+            
+        neighbor = current.copy()
+        node = np.random.randint(0, n)
+        new_color = np.random.randint(0, num_colors - 1)
+        if new_color >= neighbor[node]:
+            new_color += 1
+        neighbor[node] = new_color
+        
+        n_conf = count_conflicts(neighbor, adj_matrix)
+        
+        if n_conf <= curr_conf: # Chấp nhận bằng để có cơ hội trượt trên mặt phẳng
+            current = neighbor
+            curr_conf = n_conf
+            if curr_conf < best_conf:
+                best_conf = curr_conf
+                best = current.copy()
+                
+        history.append(best_conf)
+        
+    return best, best_conf, history
+
+
+def dfs_graph_coloring(adj_matrix, num_colors=3):
+    """
+    DFS (Constraint Satisfaction) cho Graph Coloring.
+    Quay lui tìm cách tô màu hợp lệ đầu tiên, hoặc trả về cách ít xung đột nhất.
+    """
+    n = len(adj_matrix)
+    best_coloring = [np.random.randint(0, num_colors, size=n)]
+    best_conf = [count_conflicts(best_coloring[0], adj_matrix)]
+    current_coloring = np.full(n, -1, dtype=int)
+    
+    iterations = [0]
+    MAX_DFS_STEPS = 50000 # Giới hạn chống treo máy với đồ thị quá lớn
+    
+    def backtrack(node):
+        iterations[0] += 1
+        if iterations[0] > MAX_DFS_STEPS or best_conf[0] == 0:
+            return best_conf[0] == 0
+            
+        if node == n:
+            conf = count_conflicts(current_coloring, adj_matrix)
+            if conf < best_conf[0]:
+                best_conf[0] = conf
+                best_coloring[0] = current_coloring.copy()
+            return conf == 0
+            
+        for c in range(num_colors):
+            current_coloring[node] = c
+            # Heuristic cắt tỉa: Nếu tô màu c mà xung đột ngay lập tức -> Bỏ qua
+            conflict_found = False
+            for neighbor in range(node):
+                if adj_matrix[node][neighbor] == 1 and current_coloring[neighbor] == c:
+                    conflict_found = True
+                    break
+            
+            if not conflict_found:
+                if backtrack(node + 1):
+                    return True
+        current_coloring[node] = -1
+        return False
+        
+    backtrack(0)
+    history = [best_conf[0]] * 100
+    return best_coloring[0], best_conf[0], history
