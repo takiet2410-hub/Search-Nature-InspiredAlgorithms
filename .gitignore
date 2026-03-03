@@ -13,5 +13,3 @@ env/
 # OS files
 .DS_Store
 
-# Dataset/Large files (nếu có)
-*.csv
