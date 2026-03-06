@@ -93,16 +93,16 @@ def save_scores_csv(all_scores, filename, subdir=''):
         for i in range(n_runs):
             row = [i + 1]
             for name in names:
-                row.append(f"{all_scores[name][i]:.6f}" if i < len(all_scores[name]) else '')
+                row.append(f"{all_scores[name][i]:.6e}" if i < len(all_scores[name]) else '')
             writer.writerow(row)
 
         # Summary row
         writer.writerow([])
         writer.writerow(['STATS'] + names)
-        writer.writerow(['Mean'] + [f"{np.mean(all_scores[n]):.6f}" for n in names])
-        writer.writerow(['Std']  + [f"{np.std(all_scores[n]):.6f}" for n in names])
-        writer.writerow(['Best'] + [f"{np.min(all_scores[n]):.6f}" for n in names])
-        writer.writerow(['Worst']+ [f"{np.max(all_scores[n]):.6f}" for n in names])
+        writer.writerow(['Mean'] + [f"{np.mean(all_scores[n]):.6e}" for n in names])
+        writer.writerow(['Std']  + [f"{np.std(all_scores[n]):.6e}" for n in names])
+        writer.writerow(['Best'] + [f"{np.min(all_scores[n]):.6e}" for n in names])
+        writer.writerow(['Worst']+ [f"{np.max(all_scores[n]):.6e}" for n in names])
 
     print(f"[CSV] Saved: {filepath}")
 
@@ -118,7 +118,7 @@ def save_scalability_csv(x_values, times_dict, filename, xlabel, subdir=''):
         for i, x in enumerate(x_values):
             row = [x]
             for name in names:
-                row.append(f"{times_dict[name][i]:.6f}" if i < len(times_dict[name]) else '')
+                row.append(f"{times_dict[name][i]:.6e}" if i < len(times_dict[name]) else '')
             writer.writerow(row)
 
     print(f"[CSV] Saved: {filepath}")
@@ -132,7 +132,7 @@ def save_sensitivity_csv(matrix, x_labels, y_labels, filename, xlabel, ylabel, s
         writer = csv.writer(f)
         writer.writerow([f"{ylabel} \\ {xlabel}"] + [str(x) for x in x_labels])
         for i, y in enumerate(y_labels):
-            row = [str(y)] + [f"{matrix[i, j]:.6f}" for j in range(len(x_labels))]
+            row = [str(y)] + [f"{matrix[i, j]:.6e}" for j in range(len(x_labels))]
             writer.writerow(row)
 
     print(f"[CSV] Saved: {filepath}")
@@ -167,7 +167,7 @@ def save_convergence_csv(all_histories, filename, subdir=''):
             for name in names:
                 if g < min_lens.get(name, 0):
                     vals = [h[g] for h in all_histories[name]]
-                    row += [f"{np.mean(vals):.6f}", f"{np.std(vals):.6f}"]
+                    row += [f"{np.mean(vals):.6e}", f"{np.std(vals):.6e}"]
                 else:
                     row += ['', '']
             writer.writerow(row)
@@ -1216,7 +1216,6 @@ if __name__ == "__main__":
             algorithm_names=all_cont_algorithms, 
             problem_name=prob
         )
-
     print("\n" + "="*60)
     print("HOÀN THÀNH. KIỂM TRA FOLDER RESULTS/FIGURES.")
     print("="*60)
