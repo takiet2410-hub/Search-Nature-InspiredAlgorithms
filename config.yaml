@@ -1,0 +1,157 @@
+# =============================================================================
+# config.yaml — Parameters for algorithms and problems
+# Edit this file to quickly change experimental settings.
+# Figure / CSV saving logic is NOT affected.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# EXPERIMENT GLOBALS
+# ---------------------------------------------------------------------------
+experiment:
+  runs: 30          # Number of independent runs per algorithm (statistical repetitions)
+  pop_size: 50      # Default population size shared across most algorithms
+
+# ---------------------------------------------------------------------------
+# CONTINUOUS OPTIMIZATION PROBLEMS
+# ---------------------------------------------------------------------------
+continuous:
+  problems:
+    Sphere:
+      dim: 10
+      bound: [-5.12, 5.12]
+      generations: 50
+    Rastrigin:
+      dim: 10
+      bound: [-5.12, 5.12]
+      generations: 100
+    Rosenbrock:
+      dim: 10
+      bound: [-5.0, 10.0]
+      generations: 100
+    Griewank:
+      dim: 10
+      bound: [-600.0, 600.0]
+      generations: 100
+    Ackley:
+      dim: 10
+      bound: [-32.0, 32.0]
+      generations: 100
+
+  scalability:
+    dims: [2, 5, 10, 20]       # Dimensions to sweep over in scalability tests
+    generations: 50             # Generations used in each scalability timing run
+    pop_size: 30                # Population size used in each scalability timing run
+
+# ---------------------------------------------------------------------------
+# ALGORITHM HYPERPARAMETERS
+# ---------------------------------------------------------------------------
+algorithms:
+
+  # Differential Evolution -----------------------------------------------
+  de:
+    mutation_factor: 0.8        # F  — mutation scale factor [0, 2]
+    crossover_rate: 0.7         # CR — crossover probability [0, 1]
+
+  # Particle Swarm Optimization ------------------------------------------
+  pso:
+    w: 0.7                      # Inertia weight
+    c1: 1.5                     # Cognitive coefficient
+    c2: 1.5                     # Social coefficient
+
+  # Artificial Bee Colony ------------------------------------------------
+  abc:
+    limit: null                 # Scout bee limit (null → num_employed × dim)
+
+  # Firefly Algorithm ----------------------------------------------------
+  fa:
+    alpha: 0.5                  # Randomization step size
+    beta0: 1.0                  # Max attractiveness at distance 0
+    gamma: 1.0                  # Light absorption coefficient
+    alpha_decay: 0.97           # Multiplicative decay of alpha per iteration
+
+  # Cuckoo Search --------------------------------------------------------
+  cs:
+    pa: 0.25                    # Nest abandonment probability
+    alpha: 0.01                 # Lévy flight step scale
+    beta: 1.5                   # Lévy exponent
+
+  # Simulated Annealing (shared: continuous, TSP, knapsack) --------------
+  sa:
+    T_init: 1000.0              # Initial temperature
+    T_min: 0.001                # Minimum temperature (stop condition)
+    cooling_rate: 0.995         # Geometric cooling rate per step
+
+  # Hill Climbing (continuous) -------------------------------------------
+  hc:
+    step_size: 0.5              # Neighbour step size
+
+  # Genetic Algorithm — TSP ---------------------------------------------
+  ga_tsp:
+    mutation_rate: 0.1          # Per-gene mutation probability
+    elitism_rate: 0.1           # Fraction of elite individuals carried over
+
+  # Ant Colony Optimization — TSP ---------------------------------------
+  aco_tsp:
+    alpha: 1.0                  # Pheromone weight
+    beta: 3.0                   # Heuristic (distance) weight
+    evaporation_rate: 0.5       # Pheromone evaporation rate per iteration
+    Q: 100.0                    # Pheromone deposit constant
+
+# ---------------------------------------------------------------------------
+# DISCRETE — TRAVELING SALESMAN PROBLEM
+# ---------------------------------------------------------------------------
+tsp:
+  sizes: [8, 9, 10]             # City counts for scalability / quality tests
+  generations: 100              # Default generations used for heuristic solvers
+
+# ---------------------------------------------------------------------------
+# DISCRETE — KNAPSACK PROBLEM
+# ---------------------------------------------------------------------------
+knapsack:
+  num_items_list: [10, 15, 20, 30]    # Item counts swept in scalability tests
+  quality_num_items: 20               # Fixed item count used in quality comparison
+  generations: 100                    # Generations used in quality comparison
+
+# ---------------------------------------------------------------------------
+# DISCRETE — GRAPH COLORING
+# ---------------------------------------------------------------------------
+graph_coloring:
+  num_nodes_list: [10, 15, 20]        # Node counts swept in scalability tests
+  quality_num_nodes: 20               # Fixed node count used in quality comparison
+  edge_prob: 0.5                      # Edge probability (Erdős-Rényi random graph)
+
+  gc_ga:
+    pop_size: 30
+    generations: 100
+    mutation_rate: 0.1
+
+  gc_sa:
+    max_iter: 3000
+
+  gc_aco:
+    num_ants: 30
+    alpha: 1.0
+    beta: 2.0
+    evaporation_rate: 0.5
+    Q: 10.0
+    iterations: 100             # Iterations for ACO in quality comparison
+
+  gc_hc:
+    max_iter: 3000
+
+# ---------------------------------------------------------------------------
+# DISCRETE — SHORTEST PATH
+# ---------------------------------------------------------------------------
+shortest_path:
+  num_nodes_list: [20, 50, 100]       # Node counts swept in scalability tests
+  quality_num_nodes: 50               # Fixed node count used in quality comparison
+  edge_prob: 0.4                      # Edge probability
+  aco_iters: 1000                     # ACO iterations in convergence quality test
+
+  sp_aco:
+    num_ants: 20
+    alpha: 1.0
+    beta: 2.0
+    evaporation_rate: 0.1
+    Q: 100.0
+    quality_iterations: 50            # ACO iterations in the boxplot quality comparison

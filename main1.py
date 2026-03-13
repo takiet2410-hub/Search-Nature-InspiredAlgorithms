@@ -48,6 +48,14 @@ from src.problems.discrete.graph_coloring import hc_graph_coloring, dfs_graph_co
 from src.algorithms.knapsack_solvers import hc_knapsack, dfs_knapsack
 
 # =============================================================================
+# CONFIG — Load parameters from config.yaml
+# =============================================================================
+import yaml
+
+with open('config.yaml', 'r') as _f:
+    cfg = yaml.safe_load(_f)
+
+# =============================================================================
 # HELPERS
 # =============================================================================
 def manual_onesample_ttest(sample, population_mean):
@@ -203,20 +211,26 @@ def register_tsp(name):
 
 @register_continuous("DE")
 def run_de(func, bounds, generations, pop_size):
-    de = DifferentialEvolution(func, bounds, pop_size=pop_size)
+    _de = cfg["algorithms"]["de"]
+    de = DifferentialEvolution(func, bounds, pop_size=pop_size,
+                               mutation_factor=_de["mutation_factor"],
+                               crossover_rate=_de["crossover_rate"])
     _, score, history, path = de.optimize(generations=generations)
     return score, history, path
 
 @register_continuous("HC")
 def run_hc(func, bounds, generations, pop_size):
-    hc = ContinuousLocalSearch(step_size=0.5, max_iter=generations * pop_size)
+    hc = ContinuousLocalSearch(step_size=cfg["algorithms"]["hc"]["step_size"],
+                               max_iter=generations * pop_size)
     _, score, history, path = hc.hill_climbing(func, bounds)
     sampled_history = history[::pop_size][:generations]
     return score, sampled_history, path
 
 @register_continuous("CS")
 def run_cs(func, bounds, generations, pop_size):
-    cs = CuckooSearch(func, bounds, n_nests=pop_size, pa=0.25, alpha=0.01, beta=1.5)
+    _cs = cfg["algorithms"]["cs"]
+    cs = CuckooSearch(func, bounds, n_nests=pop_size,
+                      pa=_cs["pa"], alpha=_cs["alpha"], beta=_cs["beta"])
     _, score, history, path = cs.optimize(iterations=generations)
     return score, history, path
 
@@ -228,30 +242,37 @@ def run_tlbo(func, bounds, generations, pop_size):
 
 @register_continuous("PSO")
 def run_pso(func, bounds, generations, pop_size):
-    pso = ParticleSwarmOptimization(func, bounds, num_particles=pop_size)
+    _pso = cfg["algorithms"]["pso"]
+    pso = ParticleSwarmOptimization(func, bounds, num_particles=pop_size,
+                                    w=_pso["w"], c1=_pso["c1"], c2=_pso["c2"])
     _, score, history, path = pso.optimize(iterations=generations)
     return score, history, path
 
 @register_continuous("ABC")
 def run_abc(func, bounds, generations, pop_size):
-    abc = ArtificialBeeColony(func, bounds, colony_size=pop_size)
+    abc = ArtificialBeeColony(func, bounds, colony_size=pop_size,
+                              limit=cfg["algorithms"]["abc"]["limit"])
     _, score, history, path = abc.optimize(iterations=generations)
     return score, history, path
 
 @register_continuous("FA")
 def run_fa(func, bounds, generations, pop_size):
+    _fa = cfg["algorithms"]["fa"]
     fa = FireflyAlgorithm(
         func, bounds,
         n_fireflies=pop_size,
-        alpha=0.5, beta0=1.0, gamma=1.0, alpha_decay=0.97,
+        alpha=_fa["alpha"], beta0=_fa["beta0"],
+        gamma=_fa["gamma"], alpha_decay=_fa["alpha_decay"],
     )
     _, score, history, path = fa.optimize(iterations=generations)
     return score, history, path
 
 @register_continuous("SA")
 def run_sa_continuous(func, bounds, generations, pop_size):
+    _sa = cfg["algorithms"]["sa"]
     sa = SimulatedAnnealing(
-        T_init=1000.0, T_min=1e-3, cooling_rate=0.995,
+        T_init=_sa["T_init"], T_min=_sa["T_min"],
+        cooling_rate=_sa["cooling_rate"],
         max_iter=generations * pop_size,
     )
     _, score, history, path = sa.optimize(func, bounds)
@@ -265,7 +286,10 @@ def run_sa_continuous(func, bounds, generations, pop_size):
 
 @register_tsp("GA")
 def run_ga_tsp(n, dist, generations, pop_size):
-    ga = GeneticAlgorithmTSP(n, dist, pop_size=pop_size)
+    _ga = cfg["algorithms"]["ga_tsp"]
+    ga = GeneticAlgorithmTSP(n, dist, pop_size=pop_size,
+                             mutation_rate=_ga["mutation_rate"],
+                             elitism_rate=_ga["elitism_rate"])
     route, cost, history = ga.solve(generations=generations)
     return cost, history, route
 
@@ -280,17 +304,21 @@ def run_hc_tsp(n, dist, generations, pop_size):
 
 @register_tsp("ACO")
 def run_aco_tsp(n, dist, generations, pop_size):
+    _aco = cfg["algorithms"]["aco_tsp"]
     aco = AntColonyOptimizationTSP(
         n, dist, num_ants=pop_size,
-        alpha=1.0, beta=3.0, evaporation_rate=0.5, Q=100.0
+        alpha=_aco["alpha"], beta=_aco["beta"],
+        evaporation_rate=_aco["evaporation_rate"], Q=_aco["Q"],
     )
     route, cost, history = aco.solve(iterations=generations)
     return cost, history, route
 
 @register_tsp("SA")
 def run_sa_tsp(n, dist, generations, pop_size):
+    _sa = cfg["algorithms"]["sa"]
     sa = SimulatedAnnealing(
-        T_init=1000.0, T_min=1e-3, cooling_rate=0.995,
+        T_init=_sa["T_init"], T_min=_sa["T_min"],
+        cooling_rate=_sa["cooling_rate"],
         max_iter=generations * pop_size,
     )
     route, cost, history = sa.solve_tsp(n, dist)
@@ -302,32 +330,21 @@ def run_sa_tsp(n, dist, generations, pop_size):
 # =============================================================================
 # PROBLEM REGISTRY
 # =============================================================================
+_FUNC_MAP = {
+    "Sphere":     problems.sphere_function,
+    "Rastrigin":  problems.rastrigin_function,
+    "Rosenbrock": problems.rosenbrock_function,
+    "Griewank":   problems.griewank_function,
+    "Ackley":     problems.ackley_function,
+}
+
 CONTINUOUS_PROBLEMS = {
-    "Sphere": {
-        "func": problems.sphere_function,
-        "bounds": [[-5.12, 5.12]] * 10,
-        "generations": 50,
-    },
-    "Rastrigin": {
-        "func": problems.rastrigin_function,
-        "bounds": [[-5.12, 5.12]] * 10,
-        "generations": 100,
-    },
-    "Rosenbrock": {
-        "func": problems.rosenbrock_function,
-        "bounds": [[-5, 10]] * 10,
-        "generations": 100,
-    },
-    "Griewank": {
-        "func": problems.griewank_function,
-        "bounds": [[-600, 600]] * 10,
-        "generations": 100,
-    },
-    "Ackley": {
-        "func": problems.ackley_function,
-        "bounds": [[-32, 32]] * 10,
-        "generations": 100,
-    },
+    name: {
+        "func":        _FUNC_MAP[name],
+        "bounds":      [cfg["continuous"]["problems"][name]["bound"]] * cfg["continuous"]["problems"][name]["dim"],
+        "generations": cfg["continuous"]["problems"][name]["generations"],
+    }
+    for name in cfg["continuous"]["problems"]
 }
 
 
@@ -392,7 +409,8 @@ class ContinuousComparison:
 
     def _scalability_dimensions(self, prob_name):
         print(f"\n[2] SCALABILITY (Time vs Dimensions) - {prob_name}")
-        dims = [2, 5, 10, 20]
+        _sc = cfg["continuous"]["scalability"]
+        dims = _sc["dims"]
         times = {name: [] for name in self.algorithm_names}
         
         config = CONTINUOUS_PROBLEMS[prob_name]
@@ -403,7 +421,9 @@ class ContinuousComparison:
             bounds = [base_bound] * d # Tự động tạo không gian D-chiều
             for name in self.algorithm_names:
                 s = time.time()
-                CONTINUOUS_ALGORITHMS[name](func, bounds, generations=50, pop_size=30)
+                CONTINUOUS_ALGORITHMS[name](func, bounds,
+                                            generations=_sc["generations"],
+                                            pop_size=_sc["pop_size"])
                 times[name].append(time.time() - s)
 
         folder_path = f"continuous/{prob_name.lower()}"
@@ -694,7 +714,7 @@ class KnapsackComparison:
 
     def _quality_comparison(self):
         print("\n[1] QUALITY COMPARISON — All Algorithms")
-        n_items = 20
+        n_items = cfg["knapsack"]["quality_num_items"]
         weights, values, capacity = problems.generate_knapsack_problem(n_items, seed=42)
 
         all_values = {}    # name → [val per run]
@@ -709,7 +729,7 @@ class KnapsackComparison:
             run_count = 1 if alg_name == 'DFS' else self.runs
             
             for _ in range(run_count):
-                _, val, hist = runner(weights, values, capacity, self.pop_size, 100)
+                _, val, hist = runner(weights, values, capacity, self.pop_size, cfg["knapsack"]["generations"])
                 vals.append(val)
                 hists.append(hist)
                 
@@ -875,7 +895,7 @@ class GraphColoringComparison:
 
     def _quality_comparison(self):
         print("\n[1] QUALITY COMPARISON - GC (GA, SA, ACO, HC, DFS)")
-        n = 20
+        n = cfg["graph_coloring"]["quality_num_nodes"]
         adj, edges = generate_random_graph(n, self.edge_prob, seed=42)
 
         # Greedy baseline chỉ dùng để lấy số màu làm chuẩn (không đưa vào so sánh)
@@ -887,20 +907,32 @@ class GraphColoringComparison:
 
         for _ in range(self.runs):
             # 1. GA
-            _, c, h = ga_graph_coloring(adj, num_colors=num_colors, pop_size=30, generations=100)
+            _gc_ga = cfg["graph_coloring"]["gc_ga"]
+            _, c, h = ga_graph_coloring(adj, num_colors=num_colors,
+                                        pop_size=_gc_ga["pop_size"],
+                                        generations=_gc_ga["generations"],
+                                        mutation_rate=_gc_ga["mutation_rate"])
             all_conflicts['GA'].append(c); all_histories['GA'].append(h)
             
             # 2. SA
-            _, c, h = sa_graph_coloring(adj, num_colors=num_colors, max_iter=3000)
+            _, c, h = sa_graph_coloring(adj, num_colors=num_colors,
+                                        max_iter=cfg["graph_coloring"]["gc_sa"]["max_iter"])
             all_conflicts['SA'].append(c); all_histories['SA'].append(h)
             
             # 3. ACO
-            aco = AntColonyOptimizationGC(adj, num_colors, num_ants=30)
-            _, c, h = aco.solve(iterations=100)
+            _gc_aco = cfg["graph_coloring"]["gc_aco"]
+            aco = AntColonyOptimizationGC(adj, num_colors,
+                                          num_ants=_gc_aco["num_ants"],
+                                          alpha=_gc_aco["alpha"],
+                                          beta=_gc_aco["beta"],
+                                          evaporation_rate=_gc_aco["evaporation_rate"],
+                                          Q=_gc_aco["Q"])
+            _, c, h = aco.solve(iterations=_gc_aco["iterations"])
             all_conflicts['ACO'].append(c); all_histories['ACO'].append(h)
             
             # 4. HC
-            _, c, h = hc_graph_coloring(adj, num_colors=num_colors, max_iter=3000)
+            _, c, h = hc_graph_coloring(adj, num_colors=num_colors,
+                                        max_iter=cfg["graph_coloring"]["gc_hc"]["max_iter"])
             all_conflicts['HC'].append(c); all_histories['HC'].append(h)
             
             # 5. DFS
@@ -1000,7 +1032,7 @@ class ShortestPathComparison:
 
     def _quality_comparison(self):
         print("\n[1] QUALITY COMPARISON & CONVERGENCE")
-        n = 50
+        n = cfg["shortest_path"]["quality_num_nodes"]
         folder = "discrete/shortest_path"
 
         # ==========================================
@@ -1023,8 +1055,14 @@ class ShortestPathComparison:
             all_costs['DFS'].append(c); all_explored['DFS'].append(e)
 
             # Lấy vị trí [1] là cost, [2] là explored
-            aco = AntColonyOptimizationSP(adj_r, s, g, num_ants=20)
-            res = aco.solve(iterations=50)
+            _sp_aco = cfg["shortest_path"]["sp_aco"]
+            aco = AntColonyOptimizationSP(adj_r, s, g,
+                                          num_ants=_sp_aco["num_ants"],
+                                          alpha=_sp_aco["alpha"],
+                                          beta=_sp_aco["beta"],
+                                          evaporation_rate=_sp_aco["evaporation_rate"],
+                                          Q=_sp_aco["Q"])
+            res = aco.solve(iterations=_sp_aco["quality_iterations"])
             all_costs['ACO'].append(res[1])
             all_explored['ACO'].append(res[2])
 
@@ -1043,8 +1081,8 @@ class ShortestPathComparison:
         _, c_bfs, _ = bfs_shortest(adj_fixed, s_f, g_f)
         _, c_dfs, _ = dfs_shortest(adj_fixed, s_f, g_f)
 
-        # Thêm biến lưu số vòng lặp của ACO
-        aco_iters = 1000 # Hoặc 50, 100 tùy bạn thiết lập ở aco.solve()
+        # Number of ACO iterations for the convergence curve
+        aco_iters = cfg["shortest_path"]["aco_iters"]
 
         # Baselines vẽ đường thẳng dài bằng với số vòng lặp của ACO
         all_histories = {
@@ -1055,8 +1093,14 @@ class ShortestPathComparison:
         }
 
         # Chạy ACO 5 lần để lấy lịch sử tiến hóa
+        _sp_aco = cfg["shortest_path"]["sp_aco"]
         for _ in range(5):
-            aco = AntColonyOptimizationSP(adj_fixed, s_f, g_f, num_ants=20)
+            aco = AntColonyOptimizationSP(adj_fixed, s_f, g_f,
+                                          num_ants=_sp_aco["num_ants"],
+                                          alpha=_sp_aco["alpha"],
+                                          beta=_sp_aco["beta"],
+                                          evaporation_rate=_sp_aco["evaporation_rate"],
+                                          Q=_sp_aco["Q"])
             res = aco.solve(iterations=aco_iters) # Dùng biến ở đây
             h = res[3] if len(res) > 3 else [res[1]] * aco_iters 
             all_histories['ACO'].append(h)
@@ -1178,29 +1222,47 @@ if __name__ == "__main__":
     # ================================================================
 
     # --- TSP ---
-    DiscreteComparison(algorithm_names=["GA", "ACO", "SA", "HC"], sizes=[8, 9, 10]).run_all()
+    DiscreteComparison(
+        algorithm_names=["GA", "ACO", "SA", "HC"],
+        sizes=cfg["tsp"]["sizes"],
+        runs=cfg["experiment"]["runs"],
+        pop_size=cfg["experiment"]["pop_size"],
+    ).run_all()
 
     # --- Knapsack Problem ---
-    KnapsackComparison(num_items_list=[10, 15, 20, 30]).run_all()
+    KnapsackComparison(
+        num_items_list=cfg["knapsack"]["num_items_list"],
+        runs=cfg["experiment"]["runs"],
+        pop_size=cfg["experiment"]["pop_size"],
+    ).run_all()
 
     # --- Graph Coloring ---
-    GraphColoringComparison(num_nodes_list=[10, 15, 20]).run_all()
+    GraphColoringComparison(
+        num_nodes_list=cfg["graph_coloring"]["num_nodes_list"],
+        edge_prob=cfg["graph_coloring"]["edge_prob"],
+        runs=cfg["experiment"]["runs"],
+    ).run_all()
 
     # --- Shortest Path ---
-    ShortestPathComparison(num_nodes_list=[20, 50, 100]).run_all()
+    ShortestPathComparison(
+        num_nodes_list=cfg["shortest_path"]["num_nodes_list"],
+        edge_prob=cfg["shortest_path"]["edge_prob"],
+        runs=cfg["experiment"]["runs"],
+    ).run_all()
 
     # ================================================================
     # PART 2: CONTINUOUS EXPERIMENTS — GRAND COMPARISON
     # ================================================================
     all_cont_algorithms = ["DE", "PSO", "ABC", "FA", "CS", "TLBO", "SA", "HC"]
-    all_cont_problems = ["Sphere", "Rastrigin", "Rosenbrock", "Griewank", "Ackley"]
+    all_cont_problems = list(cfg["continuous"]["problems"].keys())
 
     # Chạy đồng loạt mọi tiêu chí (Quality, Convergence, Scalability, Sensitivity) 
     # cho 8 thuật toán trên 5 bài toán
     ContinuousComparison(
         algorithm_names=all_cont_algorithms,
         problem_names=all_cont_problems,
-        runs=30
+        runs=cfg["experiment"]["runs"],
+        pop_size=cfg["experiment"]["pop_size"],
     ).run_all()
 
     # ================================================================
