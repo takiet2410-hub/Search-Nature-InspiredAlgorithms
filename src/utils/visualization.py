@@ -175,3 +175,99 @@ def plot_3d_landscape_path(func, bounds, trajectories_dict, title, filename, res
     _save_figure(filename)
     plt.close()
     print(f"[INFO] Saved 3D Trajectory: {filename}")
+
+
+# ==========================================
+# 4. ANIMATED 3D LANDSCAPE (Rotating GIF)
+# ==========================================
+from matplotlib.animation import FuncAnimation
+import matplotlib.cm as mcm
+import matplotlib.colors as mcolors
+
+def plot_3d_landscape_animated(func, bounds, title, filename,
+                                resolution=50, cmap='viridis',
+                                fps=30):
+    """
+    Tạo ảnh GIF xoay 360° bề mặt 3D của hàm benchmark.
+    Bề mặt (landscape) xoay tại chỗ, trục toạ độ đứng yên.
+
+    Args:
+        func       : Hàm mục tiêu (nhận vector 2D)
+        bounds     : [[x_min, x_max], [y_min, y_max]]
+        title      : Tiêu đề đồ thị
+        filename   : Đường dẫn lưu (không kèm phần mở rộng)
+        resolution : Số điểm lưới mỗi trục (mặc định 100)
+        cmap       : Bảng màu matplotlib (mặc định 'viridis')
+        fps        : Số khung hình mỗi giây (mặc định 30)
+    """
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # --- Tạo bề mặt (tính 1 lần, dùng lại Z cho mọi frame) ---
+    x = np.linspace(bounds[0][0], bounds[0][1], resolution)
+    y = np.linspace(bounds[1][0], bounds[1][1], resolution)
+    X, Y = np.meshgrid(x, y)
+    Z = np.zeros_like(X)
+    for i in range(X.shape[0]):
+        for j in range(X.shape[1]):
+            Z[i, j] = func([X[i, j], Y[i, j]])
+
+    # --- Tâm xoay = tâm miền ---
+    cx = (bounds[0][0] + bounds[0][1]) / 2.0
+    cy = (bounds[1][0] + bounds[1][1]) / 2.0
+    Xc = X - cx  # Toạ độ đã dời về gốc
+    Yc = Y - cy
+
+    # --- Giới hạn trục cố định (đủ chứa bề mặt khi xoay bất kỳ góc) ---
+    max_r = np.sqrt(Xc**2 + Yc**2).max()
+    xlim = (cx - max_r, cx + max_r)
+    ylim = (cy - max_r, cy + max_r)
+    zlim = (Z.min(), Z.max())
+
+    # --- Colorbar cố định (tạo 1 lần qua ScalarMappable) ---
+    norm = mcolors.Normalize(vmin=Z.min(), vmax=Z.max())
+    sm = mcm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    fig.colorbar(sm, ax=ax, shrink=0.5, aspect=10)
+
+    # --- Góc nhìn cố định ---
+    fixed_elev, fixed_azim = 30, 45
+
+    def _setup_axes():
+        """Thiết lập lại trục sau khi xoá (ax.cla)."""
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+        ax.set_zlim(zlim)
+        ax.grid(False)
+        ax.set_title(title, fontsize=14, pad=15)
+        ax.set_xlabel('X', fontsize=11)
+        ax.set_ylabel('Y', fontsize=11)
+        ax.set_zlabel('Fitness', fontsize=11)
+        ax.view_init(elev=fixed_elev, azim=fixed_azim)
+
+    def update(frame):
+        ax.cla()
+        # Xoay toạ độ (X, Y) quanh tâm miền — Z giữ nguyên
+        theta = np.radians(frame)
+        cos_t, sin_t = np.cos(theta), np.sin(theta)
+        X_rot = Xc * cos_t - Yc * sin_t + cx
+        Y_rot = Xc * sin_t + Yc * cos_t + cy
+
+        ax.plot_surface(X_rot, Y_rot, Z, cmap=cmap, alpha=0.85,
+                        edgecolor='none', vmin=Z.min(), vmax=Z.max())
+        _setup_axes()
+        return []
+
+    # --- Vẽ frame đầu tiên ---
+    update(0)
+
+    # --- Tạo animation 360 khung hình (1° mỗi khung) ---
+    anim = FuncAnimation(fig, update, frames=range(360),
+                         interval=1000 // fps, blit=False)
+
+    # --- Lưu GIF ---
+    full_path = f'results/figures/{filename}.gif'
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    anim.save(full_path, writer='pillow', fps=fps)
+    plt.close(fig)
+    print(f"[INFO] Saved animated 3D landscape: {full_path}")
